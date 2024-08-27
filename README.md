@@ -1,5 +1,5 @@
 # Vanilla-Zilla
-![](./media/icon-128.png)
+![](./_media/icon-128.png)
 
 Simple javascript framework "tool-chain free".
 
