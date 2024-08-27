@@ -3,11 +3,11 @@
  *  ----------------
  *  Copyright: Gian Angelo Geminiani
  *  License: MIT
- *  Version: 0.0.1
+ *  Version: 0.0.2
  */
 !(() => {
 
-    const v = `0.0.1`;
+    const v = `0.0.2`;
     const vPrefix = "v-"
     const context = !!window ? window : false;
     const document = !!context ? context.document : false;
