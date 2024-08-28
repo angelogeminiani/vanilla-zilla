@@ -134,6 +134,8 @@ Vanilla-Zilla uses a requireJs like approach to load external files.
 
 With `vanilla.require` you can import any kind of external resources (html, js, blob or streams).
 
+The require method is used everytime Vanilla-Zilla includes a page in an application or a component in a view.
+
 [index.js]
 
 ```javascript
@@ -167,7 +169,7 @@ With `vanilla.require` you can import any kind of external resources (html, js, 
 
 In the code above we are:
 
-- adding some pages to our application: `vanilla.app.pages.push{...}`
+- adding some pages to our application: `vanilla.app.pages.push{...}` (it uses "require")
 - navigating to the home page: `vanilla.app.pages.home()` NOTE: _the home page is the first page._
 
 The method `vanilla.app.pages.push` send an internal request for adding "Page Items" to the main application.
@@ -177,6 +179,69 @@ A "Page Item" request is just a simple object containing three properties:
 - name: Name of the page
 - url: Path of the page script. NOTE: _All Vanilla-Zilla paths are relative to main root._
 - data: optional model to pass to the page script
+
+#### BUILD THE PAGES
+
+Once we have created the Application, we will need to add some pages. Let's start to create Page1 and Page2.
+
+In Vanilla-Zilla all visible elements are "Components", So, when you create a Page or a View you are creating also a component.
+
+Components are compound from 2 elements:
+ - UI: the user interface (HTML, CSS)
+ - Business Logic: the code behind the UI
+
+In our example here is how our pages are constructed.
+
+[./views/page_1.html]
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Page 1</title>
+</head>
+<body>
+<div>
+  <%text%>
+</div>
+</body>
+</html>
+```
+
+[./views/page_1.js]
+```javascript
+class Page1 extends vanilla.BaseView {
+    constructor(...args) {
+        super(...args);
+        super.init("./views/page1.html", {text: "PAGE 1"});
+    }
+
+    onAfterCreate() {
+        console.log("onAfterCreate()", "PAGE 1");
+    }
+
+    onShow(){
+        console.log("onShow()", "PAGE 1");
+    }
+
+    onHide(){
+        console.log("onHide()", "PAGE 1");
+    }
+
+}
+
+// exports
+module.exports = {Page1};
+```
+
+Page 2 is the same, so I'll not write the code for Page 2 again.
+
+Some things to observe in this code:
+ - The UI is pure HTML: all components can be written in pure HTML in a separate file. This is a great advantage when creating a UI because you can test directly in the browser. For complete testing you should add same CSS and libraries to your component as in index file. Vanilla-Zilla will import only the body of the component.
+ - Paths are all relative to main toot. Even if our component UI is in same directory, the importer always considers the root.
+
+
+#### TRY THE CODE
 
 Try your page now.
 
