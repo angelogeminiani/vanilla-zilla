@@ -1859,7 +1859,8 @@
     (function initEffects(instance) {
 
         const _duration = 1000;
-        const _styles = `           
+        const _styles = `
+            .hidden {visibility: hidden; display:none;}           
             @keyframes vanilla-fadeIn {
                 0% { opacity: 0; }
                 100% { opacity: 1; }

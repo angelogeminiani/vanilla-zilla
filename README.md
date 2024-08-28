@@ -100,6 +100,17 @@ I prefer TailwindCSS or Bootstrap, so in my examples may be you find those, but 
     <meta charset="UTF-8">
     <meta name=viewport content="width=device-width, initial-scale=1.0">
 
+    <!-- TAILWIND CSS -->
+    <script src=https://cdn.tailwindcss.com></script>
+    <script type=application/javascript>
+        tailwind.config = {
+            content: ['./**/*.{html,js}',],
+            darkMode: "selector", // selector, class
+            plugins: [],
+            theme: {}
+        }
+    </script>
+    
     <!-- VANILLA SCRIPT -->
     <script src="../../build/vanilla_zilla.js"></script>
 </head>
@@ -109,6 +120,54 @@ I prefer TailwindCSS or Bootstrap, so in my examples may be you find those, but 
 </body>
 </html>
 ```
+Now we can star adding some Vanilla-Zilla code.
+
+### 4. Start writing your Application using imports (require) and components.
+
+Vanilla-Zilla uses a requireJs like approach to load external files.
+
+With `vanilla.require` you can import any kind of external resources (html, js, blob or streams).
+
+[index.js]
+```javascript
+/**
+ * index.js
+ */
+!(() => {
+    // set vanilla reference
+    const vanilla = window.vanilla;
+    if (!vanilla) {
+        console.error("VANILLA-ZILLA not found!");
+        return null;
+    }
+    // wait until VANILLA is completely loaded
+    vanilla.ready((vanilla) => {
+        console.info("VANILLA-ZILLA is ready to go...");
+
+        // add some pages to main application.
+        vanilla.app.pages.push(
+            {name: "Page 1", url: "./views/page1.js", data: {"title": "Home Page"}},
+            {name: "Page 2", url: "./views/page2.js", data: {"title": "Page number #2"}},
+        );
+
+        // The first page added is also the "home page"
+        vanilla.app.pages.home().catch((err)=>{
+            console.error("Error redirecting to home page:", err);
+        });
+    });
+})();
+```
+
+In the code above we are:
+- adding some pages to our application: `vanilla.app.pages.push{...}`
+- navigating to the home page: `vanilla.app.pages.home()` NOTE: _the home page is the first page._
+
+The method `vanilla.app.pages.push` send an internal request for adding "Page Items" to the main application.
+
+A "Page Item" request is just a simple object containing three properties:
+- name: Name of the page
+- url: Path of the page script . NOTE: _All Vanilla-Zilla paths are relative to main root._
+- data: optional model to pass to the page script
 
 ## Source Code
 
