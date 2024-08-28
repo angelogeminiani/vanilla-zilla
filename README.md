@@ -166,8 +166,16 @@ The method `vanilla.app.pages.push` send an internal request for adding "Page It
 
 A "Page Item" request is just a simple object containing three properties:
 - name: Name of the page
-- url: Path of the page script . NOTE: _All Vanilla-Zilla paths are relative to main root._
+- url: Path of the page script. NOTE: _All Vanilla-Zilla paths are relative to main root._
 - data: optional model to pass to the page script
+
+Try your page now.
+
+You should see something like screen below.
+
+![](./_docs/media/screen_02.png)
+
+
 
 ## Source Code
 
