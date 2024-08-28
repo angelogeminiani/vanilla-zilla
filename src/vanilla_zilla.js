@@ -7,6 +7,7 @@
  */
 !(() => {
 
+    const name = "🦖 Vanilla-Zilla";
     const v = `0.0.2`;
     const vPrefix = "v-"
     const context = !!window ? window : false;
@@ -16,51 +17,22 @@
         console.error("Invalid environment!");
         return
     }
-    const op = Object.prototype;
-    const ostring = op.toString;
-    const hasOwn = op.hasOwnProperty;
-    const isBrowser = !!(typeof context !== 'undefined' && typeof navigator !== 'undefined' && !!document);
-    const isWebWorker = !isBrowser && typeof importScripts !== 'undefined';
-
-    //-- types --//
-    class Vanilla {
-        constructor() {
-            this._uid = vuid();
-        }
-    }
-
-    //-- late actions --//
-    class Futures {
-        constructor() {
-            this._late_actions = []; // binding to execute after component is consistent (has HTML)
-        }
-
-        push(thisArg, func, ...args) {
-            if (!!func) {
-                this._late_actions.push(func.bind(thisArg || this, ...args));
-            }
-        }
-
-        doAll() {
-            if (!!this._late_actions) {
-                each(this._late_actions, (action) => {
-                    try {
-                        action();
-                    } catch (err) {
-                        console.error("", err);
-                    }
-                });
-                this._late_actions = [];
-            }
-        }
-    }
-
+    // const
+    const channel_zilla = "__zilla"; // internal channel for app communication
+    const message_type_internal = "internal";
+    const message_target_pages = "pages";
+    const message_target_routing = "routing";
     //-- events --//
     const on_before_create = "onBeforeCreate";
     const on_after_create = "onAfterCreate";
     const on_show = "onShow";
     const on_hide = "onHide";
-    //-- utils --//
+    // utils
+    const op = Object.prototype;
+    const ostring = op.toString;
+    const hasOwn = op.hasOwnProperty;
+    const isBrowser = !!(typeof context !== 'undefined' && typeof navigator !== 'undefined' && !!document);
+    const isWebWorker = !isBrowser && typeof importScripts !== 'undefined';
     const hasProp = function hasProp(obj, prop) {
         return hasOwn.call(obj, prop);
     }
@@ -118,6 +90,9 @@
     };
     const isComponent = function isComponent(v) {
         return !!v && v instanceof vanilla.BaseComponent;
+    };
+    const isMessage = function isMessage(v) {
+        return !!v && v instanceof ZMessage;
     };
     const isView = function isView(v) {
         return !!v && v instanceof vanilla.BaseView;
@@ -345,6 +320,84 @@
         return funcName;
     }
 
+    //-- types --//
+    class Vanilla {
+        constructor() {
+            this._uid = vuid();
+        }
+    }
+
+    //-- late actions --//
+    class Futures {
+        constructor() {
+            this._late_actions = []; // binding to execute after component is consistent (has HTML)
+        }
+
+        push(thisArg, func, ...args) {
+            if (!!func) {
+                this._late_actions.push(func.bind(thisArg || this, ...args));
+            }
+        }
+
+        doAll() {
+            if (!!this._late_actions) {
+                each(this._late_actions, (action) => {
+                    try {
+                        action();
+                    } catch (err) {
+                        console.error("", err);
+                    }
+                });
+                this._late_actions = [];
+            }
+        }
+    }
+
+    class ZMessage {
+        constructor(sender, type, target, data) {
+            this._sender = sender || "";
+            this._type = type || message_type_internal;
+            this._target = target || "*";
+            this._data = data || {};
+        }
+
+        get sender() {
+            return this._sender;
+        }
+
+        set sender(sender) {
+            this._sender = sender;
+        }
+
+        get type() {
+            return this._type;
+        }
+
+        set type(value) {
+            this._type = value;
+        }
+
+        get target() {
+            return this._target;
+        }
+
+        set target(target) {
+            this._target = target;
+        }
+
+        get data() {
+            return this._data;
+        }
+
+        set data(data) {
+            this._data = data;
+        }
+
+        isTarget(target) {
+            return !!this._target || this._target === "*" ? true : this._target === target;
+        }
+    }
+
     // --------------------------
     //  VANILLA
     // --------------------------
@@ -364,10 +417,289 @@
 
         //-- assign --//
         instance.version = v;
-        instance.context = {
+        instance.env = {
+            name: name,
             version: v,
             isBrowser: isBrowser,
             isWorker: isWebWorker,
+        };
+    })(vanilla);
+
+    // --------------------------
+    //  VANILLA - dom
+    // --------------------------
+
+    (function initDOM(instance) {
+
+        let _is_ready = false;
+
+        /**
+         * Invoke callback when DOM is completely loaded
+         * @param callback
+         * @param earlyInvoke boolean
+         */
+        function readyFn(callback, earlyInvoke) {
+            if (isFunction(callback)) {
+
+                function onReady() {
+                    _is_ready = true;
+                    invoke(instance, callback, instance);
+                }
+
+                if (!!_is_ready) {
+                    invoke(instance, callback, instance);
+                    return;
+                }
+
+                if (document.readyState === "complete") {
+                    // Fully loaded!
+                    _is_ready = true;
+                    invoke(instance, callback, instance);
+                } else if (document.readyState === "interactive") {
+                    // DOM ready! Images, frames, and other subresources are still downloading.
+                    if (!!earlyInvoke) {
+                        _is_ready = true;
+                        invoke(instance, callback, instance);
+                    }
+                } else {
+                    // Loading still in progress.
+                    // To wait for it to complete, add "DOMContentLoaded" or "load" listeners.
+                    context.addEventListener("DOMContentLoaded", () => {
+                        // DOM ready! Images, frames, and other sub resources are still downloading.
+                        if (!!earlyInvoke) {
+                            context.removeEventListener("load", onReady);
+                            _is_ready = true;
+                            invoke(instance, callback, instance);
+                        }
+                    });
+
+                    context.addEventListener("load", onReady);
+                }
+            }
+        }
+
+        /**
+         * Returns all script tags
+         * @returns {HTMLCollectionOf<HTMLElementTagNameMap[string]>|*[]}
+         */
+        function scriptsFn() {
+            return document.getElementsByTagName('script') || [];
+        }
+
+
+        function elem(arg) {
+            if (isHTMLElement(arg)) {
+                return arg;
+            }
+            if (isHTML(arg)) {
+                return createFromHTML(arg);
+            }
+            const {elem, str, comp} = argsSolve(arg);
+            return elem || get(!!comp ? comp.uid : str);
+        }
+
+        /**
+         * Return an Html element by ID
+         * @param id ID of the html element to return
+         * @returns {HTMLElement}
+         */
+        function get(id) {
+            try {
+                const elem = isString(id) ? document.getElementById(id) : id;
+                if (!!elem) {
+                    return elem;
+                } else {
+                    console.error(`get() -> Element not found: "${id}"`);
+                }
+            } catch (err) {
+                console.error(`get() -> Error retrieving "${id}":`, err);
+            }
+            return null;
+        }
+
+        function remove(id) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    elem.remove();
+                    return elem;
+                }
+            } catch (err) {
+                console.error(`removeElemById() -> removing element "${id}":`, err);
+            }
+            return null;
+        }
+
+        function removeElemChildrenByIdFn(id) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    elem.innerHTML = "";
+                    return elem;
+                }
+            } catch (err) {
+                console.error(`removeElemChildrenById() -> removing children from "${id}":`, err);
+            }
+            return null;
+        }
+
+        function createFromHTML(htmlString) {
+            const div = document.createElement('div');
+            div.innerHTML = htmlString.trim();
+
+            // Change this to div.childNodes to support multiple top-level nodes.
+            return div.firstElementChild;
+        }
+
+        /**
+         * Replace innerHTML of an HTML element
+         * @param id
+         * @param html
+         * @returns {HTMLElement}
+         */
+        function setElemInnerHTMLByIdFn(id, html) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    elem.innerHTML = html;
+                    return elem;
+                }
+            } catch (err) {
+                console.error(`setInnerHTMLById() -> inserting "${html}" into "${id}":`, err);
+            }
+            return null;
+        }
+
+        function appendElemChildByIdFn(id, html) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    // create and append new HTML
+                    const div = document.createElement("div");
+                    elem.append(div);
+                    div.outerHTML = html;
+                    return elem;
+                }
+            } catch (err) {
+                console.error(`appendElemChildById() -> adding child into "${id}":`, err)
+            }
+            return null;
+        }
+
+        function classRemove(id, className) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    elem.classList.remove(className);
+                }
+            } catch (err) {
+                console.error(`classRemove() -> adding child into "${id}":`, err)
+            }
+            return null;
+        }
+
+        function classAdd(id, className) {
+            try {
+                const elem = get(id);
+                if (!!elem) {
+                    elem.classList.add(className);
+                }
+            } catch (err) {
+                console.error(`classAdd() -> adding class into "${id}":`, err)
+            }
+            return null;
+        }
+
+        function tagGetOne(name) {
+            if (!!name) {
+                const elems = document.getElementsByTagName(name);
+                return !!elems && elems.length > 0 ? elems[0] : null;
+            }
+            return null;
+        }
+
+        function tagAddStyle(css, target) {
+            try {
+                target = isString(target) ? tagGetOne(target) : target;
+                target = target || head();
+                const tag = document.createElement('style');
+                target.appendChild(tag);
+                tag.appendChild(document.createTextNode(css));
+            } catch (err) {
+                console.error(`tagAddStyle() -> adding style tag into header:`, err)
+            }
+            return null;
+        }
+
+        function tagAddScript(text, target) {
+            try {
+                target = isString(target) ? tagGetOne(target) : target;
+                target = target || head();
+                const tag = document.createElement('script');
+                target.appendChild(tag);
+                tag.appendChild(document.createTextNode(text));
+            } catch (err) {
+                console.error(`tagAddScript() -> adding script tag into header:`, err)
+            }
+            return null;
+        }
+
+        function childOfById(parent, childId) {
+            let response = null;
+            const parentElem = elem(parent);
+            if (!!parentElem) {
+                each(parentElem, (elem) => {
+                    if (childId === elem.getAttribute("id")) {
+                        response = elem;
+                        return true; // exit loop
+                    }
+                });
+            } else {
+                console.error("dom.childOfById()", new Error("Parent elem do not exist!"));
+            }
+            return response;
+        }
+
+        function each(id, callback) {
+            const el = elem(id);
+            if (!!el && isFunction(callback)) {
+                if (invoke(instance, callback, el)) {
+                    return;
+                }
+                for (const child of el.children) {
+                    each(child, callback);
+                }
+            }
+        }
+
+        function head() {
+            return document.head || tagGetOne('head');
+        }
+
+        function body() {
+            return document.body || tagGetOne('body');
+        }
+
+        //-- assign --//
+        instance.dom = {
+            ready: readyFn,
+            scripts: scriptsFn(),
+            elem: elem,
+            get: get,
+            remove: remove,
+            removeChild: removeElemChildrenByIdFn,
+            setInner: setElemInnerHTMLByIdFn,
+            appendInner: appendElemChildByIdFn,
+            classRemove: classRemove,
+            classAdd: classAdd,
+            tagAddStyle: tagAddStyle,
+            tagAddScript: tagAddScript,
+            // children
+            childOfById: childOfById,
+            each: each,
+            // special
+            head: head,
+            body: body,
         };
     })(vanilla);
 
@@ -964,7 +1296,6 @@
             }
         } // BaseView
 
-
         //-- ASYNC PAGE LAUNCHER --//
 
         class ViewLoader {
@@ -1029,6 +1360,8 @@
                 this._view_promises = [];
                 this._curr_view_fn = null;
                 this._last_view_fn = null;
+                this._curr_view = null;
+                this._last_view = null;
             }
 
             push(...items) {
@@ -1105,8 +1438,10 @@
              * @returns {Promise<BaseView>}
              */
             async goto(v, effectFn, ...options) {
-                const page = await this.get(v);
-                return await this.__activateView(page, effectFn, ...options)
+                if (!!v) {
+                    const page = await this.get(v);
+                    return await this.__activateView(page, effectFn, ...options);
+                }
             }
 
             /**
@@ -1156,6 +1491,8 @@
                     } else {
                         view.show();
                     }
+                    this._last_view = this._curr_view;
+                    this._curr_view = view;
                     this._last_view_fn = this._curr_view_fn;
                     this._curr_view_fn = this.__activateView.bind(this, view, effectFn, ...options);
                 }
@@ -1167,6 +1504,9 @@
         class PageManager extends ViewManager {
             constructor() {
                 super();
+
+                // subscribe app messages
+                messages.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
             }
 
             async ready() {
@@ -1174,6 +1514,78 @@
                 return super.ready();
             }
 
+            /**
+             * Navigate to a page.
+             * @param v {int|string} index or name or slug or id
+             * @param effectFn {Function} Optional effect function
+             * @param options {any} Options effect params
+             * @returns {Promise<BaseView>}
+             */
+            async goto(v, effectFn, ...options) {
+                if (!!v) {
+                    const page = await super.get(v);
+                    const response = await super.__activateView(page, effectFn, ...options);
+                    this.__notify(page);
+                    return response;
+                }
+            }
+
+            /**
+             * Navigate the first page into page's list.
+             * @returns {Promise<BaseView>}
+             */
+            async home() {
+                const page = await super.get(0);
+                const response = await super.__activateView(page, vanilla.effects.fadeIn);
+                this.__notify(page);
+                return response;
+            }
+
+            /**
+             * Navigate to the previous page if any
+             * @returns {BaseView|null}
+             */
+            back() {
+                if (!!this._last_view_fn) {
+                    const page = this._last_view_fn();
+                    this.__notify(page);
+                    return page;
+                }
+                return null;
+            }
+
+            __notify(page) {
+                // notify app internally
+                const pageName = page.slug;
+                messages.publish(channel_zilla,
+                    new ZMessage(
+                        message_target_pages, message_type_internal, message_target_routing, {name: pageName}
+                    )
+                );
+            }
+
+            __onInternalMessage(subscription, message) {
+                if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_pages)) {
+                    if (!!message.data) {
+                        const sender = message.sender;
+                        if (sender === message_target_routing) {
+                            const hash = message.data.hash;
+                            const pageName = hash.name || "";
+                            if (!!pageName){
+                                // do not notify
+                                super.goto(pageName, null).catch((err) => {
+                                    console.error(`__onInternalMessage() Navigating to page "${pageName}"`, err);
+                                });
+                            } else {
+                                // notify home
+                                this.home().catch((err) => {
+                                    console.error(`__onInternalMessage() Navigating to Home page`, err);
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         } // Page Manager
 
         //-- Queue/Event Manager --//
@@ -1314,8 +1726,8 @@
         class App extends Vanilla {
             constructor() {
                 super();
-                this._pages = new PageManager();
-                this._messages = new QueueManager();
+                this._pages = pages;
+                this._messages = messages;
             }
 
             get pages() {
@@ -1333,9 +1745,137 @@
 
         }
 
+        const messages = new QueueManager();
+        const pages = new PageManager();
+
         //-- assign --//
         instance.BaseView = BaseView;
         instance.app = new App();
+
+    })(vanilla);
+
+    // --------------------------
+    //  VANILLA - router
+    // --------------------------
+
+    (function initRouter(instance) {
+        const history = context.history;
+        const addEventListener = context.addEventListener;
+
+        class Router {
+            constructor() {
+                this._available = true;
+                this._enabled = true;
+                this._curr_hash = {hash: "#", name: "", query: ""};
+
+                if (!history) {
+                    this._available = false;
+                    this._enabled = false;
+                    console.warn(`${name}: Cannot enable routing in this environment because is not supported!`)
+                } else {
+                    // listen to browser changes
+                    addEventListener("popstate", this.__onpopstate.bind(this));
+                    // subscribe app messages
+                    instance.app.messages.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
+                    // dom ready event
+                    instance.dom.ready(this.__onDomReady.bind(this));
+                    // ok, ready
+                    console.info(`${name}: Routing enabled!`);
+                }
+            }
+
+            //-- PROPERTIES --//
+
+            get enabled() {
+                return this._enabled && this._available;
+            }
+
+            set enabled(enabled) {
+                if (this._available) {
+                    this._enabled = enabled;
+                } else if (enabled) {
+                    console.warn(`${name} Cannot enable routing in this environment because is not supported!`)
+                }
+            }
+
+            //-- PUBLIC --//
+
+            push(pageName) {
+                if (this.enabled && !!context.location) {
+                    const url = new URL(context.location);
+                    const hash = this.__parseHash(url.hash);
+                    url.hash = "#" + pageName + (!!hash.query ? "?" + hash.query : "");
+                    history.pushState({}, "", url);
+                }
+            }
+
+            replace(pageName) {
+                if (this.enabled && !!context.location) {
+                    const url = new URL(context.location);
+                    const hash = this.__parseHash(url.hash);
+                    url.hash = "#" + pageName + (!!hash.query ? "?" + hash.query : "");
+                    history.replaceState({}, "", url);
+                }
+            }
+
+            //-- PRIVATE --//
+
+            __onDomReady(){
+                const url = new URL(context.location);
+                this._curr_hash = this.__parseHash(url.hash);
+                this.__notify();
+            }
+
+            __onpopstate(e) {
+                const hash = this.__parseHash(e.target.location.hash);
+                const changed = !!hash && hash.name !== this._curr_hash.name;
+                this._curr_hash = hash;
+                if (changed) {
+                    this.__notify();
+                }
+            }
+
+            __parseHash(rawHash) {
+                const response = {
+                    hash: rawHash,
+                    name: "",
+                    query: "",
+                }
+                const tokens = rawHash.substring(1).toLowerCase().split("?") || [];
+                if (tokens.length > 0) {
+                    response.name = tokens[0];
+                    if (tokens.length === 2) {
+                        response.query = tokens[1];
+                    }
+                }
+                return response;
+            }
+
+            __notify() {
+                const hash = this._curr_hash;
+                // notify app internally
+                instance.app.messages.publish(channel_zilla,
+                    new ZMessage(
+                        message_target_routing, message_type_internal, message_target_pages, {hash: hash}
+                    )
+                );
+            }
+
+            __onInternalMessage(subscription, message) {
+                if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_routing)) {
+                    if (!!message.data) {
+                        const sender = message.sender;
+                        if (sender === message_target_pages) {
+                            const pageName = message.data.name;
+                            this.push(pageName);
+                        }
+                    }
+                }
+            }
+        } // Router
+
+        //-- assign --//
+        instance.routing = new Router();
 
     })(vanilla);
 
@@ -1573,285 +2113,6 @@
 
     })(vanilla);
 
-
-    // --------------------------
-    //  VANILLA - dom
-    // --------------------------
-
-    (function initDOM(instance) {
-
-        let _is_ready = false;
-
-        /**
-         * Invoke callback when DOM is completely loaded
-         * @param callback
-         * @param earlyInvoke boolean
-         */
-        function readyFn(callback, earlyInvoke) {
-            if (isFunction(callback)) {
-
-                function onReady() {
-                    _is_ready = true;
-                    invoke(instance, callback, instance);
-                }
-
-                if (!!_is_ready) {
-                    invoke(instance, callback, instance);
-                    return;
-                }
-
-                if (document.readyState === "complete") {
-                    // Fully loaded!
-                    _is_ready = true;
-                    invoke(instance, callback, instance);
-                } else if (document.readyState === "interactive") {
-                    // DOM ready! Images, frames, and other subresources are still downloading.
-                    if (!!earlyInvoke) {
-                        _is_ready = true;
-                        invoke(instance, callback, instance);
-                    }
-                } else {
-                    // Loading still in progress.
-                    // To wait for it to complete, add "DOMContentLoaded" or "load" listeners.
-                    context.addEventListener("DOMContentLoaded", () => {
-                        // DOM ready! Images, frames, and other sub resources are still downloading.
-                        if (!!earlyInvoke) {
-                            context.removeEventListener("load", onReady);
-                            _is_ready = true;
-                            invoke(instance, callback, instance);
-                        }
-                    });
-
-                    context.addEventListener("load", onReady);
-                }
-            }
-        }
-
-        /**
-         * Returns all script tags
-         * @returns {HTMLCollectionOf<HTMLElementTagNameMap[string]>|*[]}
-         */
-        function scriptsFn() {
-            return document.getElementsByTagName('script') || [];
-        }
-
-
-        function elem(arg) {
-            if (isHTMLElement(arg)) {
-                return arg;
-            }
-            if (isHTML(arg)) {
-                return createFromHTML(arg);
-            }
-            const {elem, str, comp} = argsSolve(arg);
-            return elem || get(!!comp ? comp.uid : str);
-        }
-
-        /**
-         * Return an Html element by ID
-         * @param id ID of the html element to return
-         * @returns {HTMLElement}
-         */
-        function get(id) {
-            try {
-                const elem = isString(id) ? document.getElementById(id) : id;
-                if (!!elem) {
-                    return elem;
-                } else {
-                    console.error(`get() -> Element not found: "${id}"`);
-                }
-            } catch (err) {
-                console.error(`get() -> Error retrieving "${id}":`, err);
-            }
-            return null;
-        }
-
-        function remove(id) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    elem.remove();
-                    return elem;
-                }
-            } catch (err) {
-                console.error(`removeElemById() -> removing element "${id}":`, err);
-            }
-            return null;
-        }
-
-        function removeElemChildrenByIdFn(id) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    elem.innerHTML = "";
-                    return elem;
-                }
-            } catch (err) {
-                console.error(`removeElemChildrenById() -> removing children from "${id}":`, err);
-            }
-            return null;
-        }
-
-        function createFromHTML(htmlString) {
-            const div = document.createElement('div');
-            div.innerHTML = htmlString.trim();
-
-            // Change this to div.childNodes to support multiple top-level nodes.
-            return div.firstElementChild;
-        }
-
-        /**
-         * Replace innerHTML of an HTML element
-         * @param id
-         * @param html
-         * @returns {HTMLElement}
-         */
-        function setElemInnerHTMLByIdFn(id, html) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    elem.innerHTML = html;
-                    return elem;
-                }
-            } catch (err) {
-                console.error(`setInnerHTMLById() -> inserting "${html}" into "${id}":`, err);
-            }
-            return null;
-        }
-
-        function appendElemChildByIdFn(id, html) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    // create and append new HTML
-                    const div = document.createElement("div");
-                    elem.append(div);
-                    div.outerHTML = html;
-                    return elem;
-                }
-            } catch (err) {
-                console.error(`appendElemChildById() -> adding child into "${id}":`, err)
-            }
-            return null;
-        }
-
-        function classRemove(id, className) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    elem.classList.remove(className);
-                }
-            } catch (err) {
-                console.error(`classRemove() -> adding child into "${id}":`, err)
-            }
-            return null;
-        }
-
-        function classAdd(id, className) {
-            try {
-                const elem = get(id);
-                if (!!elem) {
-                    elem.classList.add(className);
-                }
-            } catch (err) {
-                console.error(`classAdd() -> adding class into "${id}":`, err)
-            }
-            return null;
-        }
-
-        function tagGetOne(name) {
-            if (!!name) {
-                const elems = document.getElementsByTagName(name);
-                return !!elems && elems.length > 0 ? elems[0] : null;
-            }
-            return null;
-        }
-
-        function tagAddStyle(css, target) {
-            try {
-                target = isString(target) ? tagGetOne(target) : target;
-                target = target || head();
-                const tag = document.createElement('style');
-                target.appendChild(tag);
-                tag.appendChild(document.createTextNode(css));
-            } catch (err) {
-                console.error(`tagAddStyle() -> adding style tag into header:`, err)
-            }
-            return null;
-        }
-
-        function tagAddScript(text, target) {
-            try {
-                target = isString(target) ? tagGetOne(target) : target;
-                target = target || head();
-                const tag = document.createElement('script');
-                target.appendChild(tag);
-                tag.appendChild(document.createTextNode(text));
-            } catch (err) {
-                console.error(`tagAddScript() -> adding script tag into header:`, err)
-            }
-            return null;
-        }
-
-        function childOfById(parent, childId) {
-            let response = null;
-            const parentElem = elem(parent);
-            if (!!parentElem) {
-                each(parentElem, (elem) => {
-                    if (childId === elem.getAttribute("id")) {
-                        response = elem;
-                        return true; // exit loop
-                    }
-                });
-            } else {
-                console.error("dom.childOfById()", new Error("Parent elem do not exist!"));
-            }
-            return response;
-        }
-
-        function each(id, callback) {
-            const el = elem(id);
-            if (!!el && isFunction(callback)) {
-                if (invoke(instance, callback, el)) {
-                    return;
-                }
-                for (const child of el.children) {
-                    each(child, callback);
-                }
-            }
-        }
-
-        function head() {
-            return document.head || tagGetOne('head');
-        }
-
-        function body() {
-            return document.body || tagGetOne('body');
-        }
-
-        //-- assign --//
-        instance.dom = {
-            ready: readyFn,
-            scripts: scriptsFn(),
-            elem: elem,
-            get: get,
-            remove: remove,
-            removeChild: removeElemChildrenByIdFn,
-            setInner: setElemInnerHTMLByIdFn,
-            appendInner: appendElemChildByIdFn,
-            classRemove: classRemove,
-            classAdd: classAdd,
-            tagAddStyle: tagAddStyle,
-            tagAddScript: tagAddScript,
-            // children
-            childOfById: childOfById,
-            each: each,
-            // special
-            head: head,
-            body: body,
-        };
-    })(vanilla);
-
     // --------------------------
     //  VANILLA - effects
     // --------------------------
@@ -1859,8 +2120,7 @@
     (function initEffects(instance) {
 
         const _duration = 1000;
-        const _styles = `
-            .hidden {visibility: hidden; display:none;}           
+        const _styles = `      
             @keyframes vanilla-fadeIn {
                 0% { opacity: 0; }
                 100% { opacity: 1; }
@@ -2073,6 +2333,18 @@
     })(vanilla);
 
     // --------------------------
+    //  VANILLA - init
+    // --------------------------
+
+    (function init(instance) {
+
+        const _styles = `.hidden {visibility: hidden; display:none;}`;
+        // add styles to dom
+        instance.dom.tagAddStyle(_styles);
+
+    })(vanilla);
+
+    // --------------------------
     //  vanilla shortcuts
     // --------------------------
 
@@ -2082,7 +2354,7 @@
     //  vanilla loaded
     // --------------------------
 
-    console.info(`VANILLA v${vanilla.version}`);
+    console.info(`${name} v${vanilla.version}`);
 
     // --------------------------
     //  exports

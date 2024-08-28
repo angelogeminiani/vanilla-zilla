@@ -19,8 +19,10 @@
         );
 
         // The first page added is also the "home page"
-        vanilla.app.pages.home().catch((err)=>{
-            console.error("Error redirecting to home page:", err);
-        });
+        if (!vanilla.routing.enabled) {
+            vanilla.app.pages.home().catch((err) => {
+                console.error("Error redirecting to home page:", err);
+            });
+        }
     });
 })();
