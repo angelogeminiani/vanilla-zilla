@@ -239,6 +239,7 @@ Page 2 is the same, so I'll not write the code for Page 2 again.
 Some things to observe in this code:
  - The UI is pure HTML: all components can be written in pure HTML in a separate file. This is a great advantage when creating a UI because you can test directly in the browser. For complete testing you should add same CSS and libraries to your component as in index file. Vanilla-Zilla will import only the body of the component.
  - Paths are all relative to main toot. Even if our component UI is in same directory, the importer always considers the root.
+ - While in the index.html "launcher" the HTML file included the javascript file with teh tag `<script src="index.js"></script>`, in components is the javascript file that load the HTML file using a require method (or other related methods exposed from the PAGES object or from component's constructors).
 
 
 #### TRY THE CODE
