@@ -188,6 +188,14 @@ Now you can test the internal routing changing the url.
 
 Change URL hash from `http://localhost/index.html#page_1` to `http://localhost/index.html#page_2` and back.
 
+## Complete Documentation
+
+- Documentation: [HERE](./_docs/index.md)
+- Samples: [HERE](./samples)
+  - Quick Start: [HERE](./samples/_quick_start) 
+
+NOTE: Vanilla-Zilla is still under development and things may change overnight.
+
 ## Source Code
 
 [Sources](https://github.com/angelogeminiani/vanilla-zilla/blob/main/src/vanilla_zilla.js)
