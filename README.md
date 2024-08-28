@@ -1,4 +1,5 @@
 # Vanilla-Zilla
+
 ![](./_media/icon-128.png)
 
 Simple javascript framework "tool-chain free".
@@ -7,7 +8,7 @@ No NPM, no NPX, no Webpack, etc... only Vanilla Javascript and your preferred li
 
 ## Quick Start
 
-Vanilla-Zilla works without Node, Webpack, etc.. 
+Vanilla-Zilla works without Node, Webpack, etc..
 
 So, you can start creating your first page, the index.html.
 
@@ -20,7 +21,7 @@ So, you can start creating your first page, the index.html.
     <meta charset="UTF-8">
     <meta name=viewport content="width=device-width, initial-scale=1.0">
 
-    
+
 </head>
 <body>
 
@@ -29,9 +30,10 @@ So, you can start creating your first page, the index.html.
 ```
 
 ### 1. Include the script in your HTML head.
+
 ```html
  <!-- VANILLA SCRIPT -->
- <script src="./vanilla-zilla.min.js"></script>
+<script src="./vanilla-zilla.min.js"></script>
 ```
 
 ### 2. Create your main javascript launcher
@@ -39,6 +41,7 @@ So, you can start creating your first page, the index.html.
 Usually I call this script `index.js` (yes, not great creativity in this 😁).
 
 [index.html]
+
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -59,11 +62,12 @@ Usually I call this script `index.js` (yes, not great creativity in this 😁).
 ```
 
 [index.js]
+
 ```javascript
 /**
  * index.js
  */
-!(()=>{
+!(() => {
     // set vanilla reference
     const vanilla = window.vanilla;
     if (!vanilla) {
@@ -71,9 +75,9 @@ Usually I call this script `index.js` (yes, not great creativity in this 😁).
         return null;
     }
     // wait until VANILLA is completely loaded
-    vanilla.ready((vanilla)=>{
+    vanilla.ready((vanilla) => {
         console.info("VANILLA-ZILLA is ready to go...");
-        
+
     });
 })();
 ```
@@ -91,6 +95,7 @@ Once you have tested that Vanilla-Zilla works, you can go on adding your preferr
 I prefer TailwindCSS or Bootstrap, so in my examples may be you find those, but you can adopt what you prefer.
 
 [index.html]
+
 ```html
 <!DOCTYPE html>
 <html lang="en">
@@ -110,7 +115,7 @@ I prefer TailwindCSS or Bootstrap, so in my examples may be you find those, but 
             theme: {}
         }
     </script>
-    
+
     <!-- VANILLA SCRIPT -->
     <script src="../../build/vanilla_zilla.js"></script>
 </head>
@@ -120,6 +125,7 @@ I prefer TailwindCSS or Bootstrap, so in my examples may be you find those, but 
 </body>
 </html>
 ```
+
 Now we can star adding some Vanilla-Zilla code.
 
 ### 4. Start writing your Application using imports (require) and components.
@@ -129,6 +135,7 @@ Vanilla-Zilla uses a requireJs like approach to load external files.
 With `vanilla.require` you can import any kind of external resources (html, js, blob or streams).
 
 [index.js]
+
 ```javascript
 /**
  * index.js
@@ -151,7 +158,7 @@ With `vanilla.require` you can import any kind of external resources (html, js, 
         );
 
         // The first page added is also the "home page"
-        vanilla.app.pages.home().catch((err)=>{
+        vanilla.app.pages.home().catch((err) => {
             console.error("Error redirecting to home page:", err);
         });
     });
@@ -159,12 +166,14 @@ With `vanilla.require` you can import any kind of external resources (html, js, 
 ```
 
 In the code above we are:
+
 - adding some pages to our application: `vanilla.app.pages.push{...}`
 - navigating to the home page: `vanilla.app.pages.home()` NOTE: _the home page is the first page._
 
 The method `vanilla.app.pages.push` send an internal request for adding "Page Items" to the main application.
 
 A "Page Item" request is just a simple object containing three properties:
+
 - name: Name of the page
 - url: Path of the page script. NOTE: _All Vanilla-Zilla paths are relative to main root._
 - data: optional model to pass to the page script
@@ -175,7 +184,9 @@ You should see something like screen below.
 
 ![](./_docs/media/screen_02.png)
 
+Now you can test the internal routing changing the url.
 
+Change URL hash from `http://localhost/index.html#page_1` to `http://localhost/index.html#page_2` and back.
 
 ## Source Code
 

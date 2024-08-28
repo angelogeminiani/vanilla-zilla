@@ -8,6 +8,7 @@
         console.error("VANILLA-ZILLA not found!");
         return null;
     }
+    console.log(vanilla);
     // wait until VANILLA is completely loaded
     vanilla.ready((vanilla) => {
         console.info("VANILLA-ZILLA is ready to go...");
