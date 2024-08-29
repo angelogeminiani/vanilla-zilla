@@ -25,6 +25,8 @@
     //-- events --//
     const on_before_create = "onBeforeCreate";
     const on_after_create = "onAfterCreate";
+    const on_ready = "onReady";
+    const on_data_received = "onDataReceived";
     const on_show = "onShow";
     const on_hide = "onHide";
     // utils
@@ -68,7 +70,10 @@
         return ostring.call(item) === '[object Array]';
     };
     const isFunction = function isFunction(item) {
-        return ostring.call(item) === '[object Function]';
+        return !!item && ostring.call(item) === '[object Function]';
+    };
+    const isAsyncFunction = function isAsyncFunction(item) {
+        return !!item && ostring.call(item) === '[object AsyncFunction]';
     };
     const isString = function isString(v) {
         return (typeof (v) === "string");
@@ -146,7 +151,7 @@
         return false;
     };
     const invoke = function invoke(obj, fn, ...args) {
-        if (isFunction(fn)) {
+        if (!!fn && (isFunction(fn) || isAsyncFunction(fn))) {
             return fn.call(obj, ...args);
         }
         return false;
@@ -704,6 +709,217 @@
     })(vanilla);
 
     // --------------------------
+    //  VANILLA - require
+    // --------------------------
+
+    (function initRequire(instance) {
+
+        const _cache = {};
+        const _cache_count = {};
+        const _ext_fetch = {
+            "md": "text",
+            "js": "text",
+            "txt": "text",
+            "json": "json",
+            "jpg": "blob",
+            "png": "blob",
+            "pdf": "bytes",
+            "wav": "arrayBuffer",
+        };
+        const _ext_solve = {
+            "js": "script",
+        };
+
+        const _config = {
+            use_cache: true,
+            limit: 700, // number of "require" of same url before to write a warning
+        };
+
+        function configFn(value) {
+            eachProp(value, function (k, v) {
+                _config[k] = v;
+            });
+            return _config;
+        }
+
+        function _fetchFn(fmt, rawUrls, callback) {
+            if (!rawUrls) {
+                invoke(null, callback, null, [new Error("Missing url parameter.")]);
+                return;
+            }
+
+            const urls = isArray(rawUrls) ? rawUrls : [rawUrls];
+            const promises = [];
+            const data = [];
+            const limit = configFn().limit;
+
+            for (let url of urls) {
+                url = urlHref(url); // new URL(url, document.baseURI).href;
+                _cache_count[url] = hasProp(_cache_count, url) ? _cache_count[url] + 1 : 1;
+                if (_cache_count[url] > limit) {
+                    console.warn(`Component reached the limit of ${limit} requests: ${url}`);
+                    _cache_count[url] = 0;
+                }
+                if (!!_cache[url] && configFn().use_cache) {
+                    data.push(_cache[url]);
+                } else {
+                    promises.push(fetch(url, {method: "GET"}))
+                }
+            }
+
+            if (data.length === urls.length) {
+                // got all required data
+                invoke(null, callback, data);
+                return;
+            }
+
+            Promise.all(promises).then(async function (requests) {
+                for (const request of requests) {
+                    const status = await request.status;
+                    const statusText = await request.statusText;
+                    const url = await request.url;
+                    const ext = url.split('.').pop();
+                    const type = fmt || _ext_fetch[ext] || "text";
+                    const item = {
+                        url: url,
+                        ext: ext,
+                        type: type,
+                    };
+                    if (status !== 200) {
+                        item["type"] = "error";
+                        item["error"] = new Error(`Error ${status} "${statusText}": ${url}`)
+                        data.push(item);
+                    } else {
+                        try {
+                            if (type === "text") item[type] = await request.text();
+                            if (type === "json") item[type] = await request.json();
+                            if (type === "blob") item[type] = await request.blob();
+                            if (type === "bytes") item[type] = await request.bytes();
+                            if (type === "arrayBuffer") item[type] = await request.arrayBuffer();
+                            data.push(item);
+                            _cache[url] = item;
+                        } catch (e) {
+                            data.push({
+                                url: url,
+                                error: e
+                            });
+                        }
+                    }
+                }
+                invoke(instance, callback, data);
+            }).catch(function (errors) {
+                data.push({
+                    error: errors
+                });
+                invoke(instance, callback, data);
+            });
+        } // fetchFn
+
+        function _solve(fetchResponses, callback) {
+            const solved = [];
+            const errors = [];
+            for (const response of fetchResponses) {
+                if (!!response.error) {
+                    errors.push(response.error);
+                } else {
+                    const ext = response["ext"];
+                    const type_fetch = response["type"]
+                    const fmt = _ext_solve[ext] || type_fetch;
+                    try {
+                        const item = {
+                            type: fmt
+                        };
+                        switch (fmt) {
+                            case "blob":
+                                // const objectURL = URL.createObjectURL(response["blob"]);
+                                // myImage.src = objectURL;
+                                item["value"] = response["blob"];
+                                break;
+                            case "bytes":
+                                // const text = new TextDecoder().decode(response["bytes"]);
+                                item["value"] = response["bytes"];
+                                break;
+                            case "arrayBuffer":
+                                item["value"] = response["arrayBuffer"];
+                                break;
+                            case "json":
+                                item["value"] = response["json"];
+                                break;
+                            case "script":
+                                const text = response["text"];
+                                const evaluated = eval(text);
+                                if (!!evaluated) {
+                                    item["value"] = evaluated;
+                                } else {
+                                    console.warn("_solve: Missing return or export statement!", response);
+                                }
+                                /**
+                                 let count = 0;
+                                 eachProp(evaluated, (k, v) => {
+                                 console.log(count, k, "=", v);
+                                 count++;
+                                 })
+                                 **/
+                                break;
+                            default:
+                                item["value"] = response["text"];
+                        }
+                        solved.push(item);
+                    } catch (e) {
+                        errors.push(e);
+                    }
+                }
+            }
+            if (errors.length > 0) {
+                invoke(instance, callback, solved, new AggregateError(errors, "Errors fetching data"));
+            } else {
+                invoke(instance, callback, solved, false);
+            }
+        }
+
+        function require(rawUrls, callback, fmt) {
+            return new Promise((resolve, reject) => {
+                if (!!rawUrls) {
+                    _fetchFn(fmt, rawUrls, function (responses) {
+                        _solve(responses, function (solved, err) {
+                            const exports = {};
+                            let count = 0;
+                            for (const item of solved) {
+                                if (item["type"] === "script") {
+                                    eachProp(item["value"], (k, v) => {
+                                        exports[k] = v;
+                                    });
+                                } else {
+                                    exports[count] = item["value"];
+                                    count++;
+                                }
+                            }
+                            if (!!err) {
+                                if (!!callback) {
+                                    invoke(instance, callback, exports, err);
+                                }
+                                reject(err);
+                            } else {
+                                if (!!callback) {
+                                    invoke(instance, callback, exports, false);
+                                }
+                                resolve(exports);
+                            }
+                        });
+                    });
+                } else {
+                    reject(new Error("Nothing to require, missing URLs"));
+                }
+            });
+
+        } // require
+
+        //-- assign --//
+        instance.require = require;
+        instance.require.config = configFn;
+    })(vanilla);
+
+    // --------------------------
     //  VANILLA - events
     // --------------------------
 
@@ -804,6 +1020,121 @@
     })(vanilla);
 
     // --------------------------
+    //  VANILLA - helper classes
+    // --------------------------
+
+    (function initClasses(instance) {
+
+        /**
+         *  DataLoader
+         *  Load data from url passed into constructor
+         */
+        class DataLoader extends Vanilla {
+            constructor(v) {
+                super();
+                this._model = false; // empty fake model - no model loaded
+                this._created = false;
+                this.__require(v);
+            }
+
+            /**
+             * Return the current model.
+             * Use onDataReceived in subclasses to handle event when data is received
+             * @returns {Promise<Object>}
+             */
+            async model() {
+                return new Promise(async (resolve, reject) => {
+                    if (!this._model) {
+                        resolve(null);
+                    } else {
+                        if (isPromise(this._model)) {
+                            const response = await this._model;
+                            resolve(response);
+                        } else {
+                            resolve(this._model);
+                        }
+                    }
+                });
+            }
+
+            set(v) {
+                if (!!v) {
+                    if (!this._model) {
+                        this.__require(v);
+                    } else {
+                        // model already assigned
+                        if (isObject(v)) {
+                            this._model = v;
+                        }
+                    }
+                }
+            }
+
+            __require(v) {
+                const self = this;
+                if (!!v) {
+                    self.__invoke_before_create();
+                    if (isUrl(v)) {
+                        self._model = new Promise(async (resolve, reject) => {
+                            vanilla.require(v, (exports, err) => {
+                                if (!!err) {
+                                    reject(err);
+                                } else {
+                                    const data = exports[0];
+                                    if (!!data) {
+                                        self._model = data;
+                                        self._model = this.__invoke_data_received(data); // data can be transformed
+                                        self.__invoke_after_create();
+                                        resolve(self._model); // returns transformed data
+                                    } else {
+                                        reject(new Error("Data not found"));
+                                    }
+                                }
+                            }).catch();
+                        })
+                        return;
+                    }
+                    if (isObject(v)) {
+                        self._model = this.__invoke_data_received(v);
+                        self.__invoke_after_create();
+                        return
+                    }
+
+                    // v is not supported
+                    throw new Error(`Data not supported: ${v}`);
+                } else {
+                    self.__invoke_after_create();
+                }
+            }
+
+            __invoke_before_create() {
+                invoke(this, this[on_before_create]);
+            }
+
+            __invoke_after_create() {
+                if (!this._created) {
+                    this._created = true;
+                    invoke(this, this[on_after_create]);
+                }
+            }
+
+            __invoke_data_received(data) {
+                const response = invoke(this, this[on_data_received], data);
+                if (isObject(response)) {
+                    return response;
+                }
+                return data;
+            }
+        }
+
+
+        //-- assign --//
+        instance.classes = {
+            DataLoader: DataLoader,
+        };
+    })(vanilla);
+
+    // --------------------------
     //  VANILLA - components
     // --------------------------
 
@@ -822,7 +1153,9 @@
                 this._late_actions = new Futures(); // binding to execute after component is consistent (has HTML)
                 this._elem = null; // dom ui
                 this._elem_promise = null;
+                this._consistence_promise_resolver = Promise.withResolvers();
                 this._ready_promise_resolver = Promise.withResolvers();
+                this._created = false;
 
                 // initialize reading all arguments
                 this.__init_component(...args);
@@ -905,7 +1238,7 @@
              * @returns {Promise<BaseComponent>}
              */
             async ready() {
-                return this._ready_promise_resolver.promise;
+                return await this._ready_promise_resolver.promise;
             }
 
             //-- EVENTS --//
@@ -975,12 +1308,16 @@
                 return null;
             }
 
-            attach(id) {
+            attach(v) {
                 const self = this;
-                if (!!id) {
+                if (!!v) {
                     try {
-                        const vid = toVUID(this._uid, id) // isVUID(id) ? id : this._uid + "-" + id;
-                        const parent = instance.dom.get(vid);
+                        const {promise, elem, str, comp} = argsSolve(v);
+                        // const vid = toVUID(this._uid, id) // isVUID(id) ? id : this._uid + "-" + id;
+                        const parent = !!elem ? elem
+                            : !!promise ? promise
+                                : !!str ? instance.dom.get(toVUID(this._uid, v))
+                                    : !!comp ? comp.getElem() : v;
                         if (isHTMLElement(parent)) {
                             // parent is valid HTMLElement
                             this._parent_elem = parent;
@@ -989,7 +1326,7 @@
                                 this._detached = false;
                             } else {
                                 // we have a parent node, but not yet html
-                                this._late_actions.push(this, this.attach, id);
+                                this._late_actions.push(this, this.attach, v);
                             }
                         } else if (isPromise(parent)) {
                             // parent is a promise
@@ -1109,8 +1446,9 @@
             //-- PRIVATE --//
 
             __init_component(...args) {
+                // console.log("BaseComponent.__init_component()", ...args);
                 // onBeforeCreate
-                invoke(this, this[on_before_create]);
+                this.__invoke_before_create();
 
                 const {obj, str, elem} = argsSolve(...args);
                 if (!!obj) {
@@ -1166,13 +1504,13 @@
                             this._late_actions.doAll();
                         }
 
-                        // invoke initialized
-                        this._ready_promise_resolver.resolve(this);
-
                         // onAfterCreate
-                        invoke(this, this[on_after_create]);
+                        this.__invoke_after_create();
+
+                        // invoke initialized
+                        this._consistence_promise_resolver.resolve(this);
                     } catch (err) {
-                        this._ready_promise_resolver.reject(err);
+                        this._consistence_promise_resolver.reject(err);
                     }
                 }
             }
@@ -1183,6 +1521,34 @@
                     return `<div>${response}</div>`;
                 }
                 return response;
+            }
+
+            __invoke_before_create() {
+                invoke(this, this[on_before_create]);
+            }
+
+            __invoke_after_create() {
+                const self = this;
+                if (!self._created) {
+                    self._created = true;
+                    const response = invoke(self, self[on_after_create]);
+                    // resolve ready
+                    if (isPromise(response)) {
+                        response.catch((err) => {
+                            self._ready_promise_resolver.reject(err);
+                        }).then((item) => {
+                            self._ready_promise_resolver.resolve(self);
+                            self.__invoke_on_ready();
+                        });
+                    } else {
+                        self._ready_promise_resolver.resolve(self);
+                        self.__invoke_on_ready();
+                    }
+                }
+            }
+
+            __invoke_on_ready() {
+                invoke(this, this[on_ready]);
             }
 
         } // Component class
@@ -1237,6 +1603,10 @@
                     this._name = value;
                     this._slug = slugify(value);
                 }
+            }
+
+            get model() {
+                return this._model;
             }
 
             get views() {
@@ -1331,9 +1701,9 @@
                 const url = this._url;
                 const model = this._model;
                 const name = this._name;
-                instance.require(url, (exports, errors) => {
-                    if (!!errors) {
-                        this._view_resolver.reject(new Error((`Error creating page from "${url}": ${errors}`)));
+                instance.require(url, (exports, err) => {
+                    if (!!err) {
+                        this._view_resolver.reject(new Error((`Error creating page from "${url}": ${err}`)));
                         // console.error(`Error creating page from "${url}": `, errors);
                     } else {
                         eachProp(exports, async (k, ctr) => {
@@ -1571,7 +1941,7 @@
                         if (sender === message_target_routing) {
                             const hash = message.data.hash;
                             const pageName = hash.name || "";
-                            if (!!pageName){
+                            if (!!pageName) {
                                 // do not notify
                                 super.goto(pageName, null).catch((err) => {
                                     console.error(`__onInternalMessage() Navigating to page "${pageName}"`, err);
@@ -1820,7 +2190,7 @@
 
             //-- PRIVATE --//
 
-            __onDomReady(){
+            __onDomReady() {
                 const url = new URL(context.location);
                 this._curr_hash = this.__parseHash(url.hash);
                 this.__notify();
@@ -1878,203 +2248,6 @@
         instance.routing = new Router();
 
     })(vanilla);
-
-    // --------------------------
-    //  VANILLA - require
-    // --------------------------
-
-    (function initRequire(instance) {
-
-        const _cache = {};
-        const _cache_count = {};
-        const _ext_fetch = {
-            "md": "text",
-            "js": "text",
-            "txt": "text",
-            "json": "json",
-            "jpg": "blob",
-            "png": "blob",
-            "pdf": "bytes",
-            "wav": "arrayBuffer",
-        };
-        const _ext_solve = {
-            "js": "script",
-        };
-
-        const _config = {
-            use_cache: true,
-            limit: 700, // number of "require" of same url before to write a warning
-        };
-
-        function configFn(value) {
-            eachProp(value, function (k, v) {
-                _config[k] = v;
-            });
-            return _config;
-        }
-
-        function _fetchFn(fmt, rawUrls, callback) {
-            if (!rawUrls) {
-                invoke(null, callback, null, [new Error("Missing url parameter.")]);
-                return;
-            }
-
-            const urls = isArray(rawUrls) ? rawUrls : [rawUrls];
-            const promises = [];
-            const data = [];
-            const limit = configFn().limit;
-
-            for (let url of urls) {
-                url = urlHref(url); // new URL(url, document.baseURI).href;
-                _cache_count[url] = hasProp(_cache_count, url) ? _cache_count[url] + 1 : 1;
-                if (_cache_count[url] > limit) {
-                    console.warn(`Component reached the limit of ${limit} requests: ${url}`);
-                    _cache_count[url] = 0;
-                }
-                if (!!_cache[url] && configFn().use_cache) {
-                    data.push(_cache[url]);
-                } else {
-                    promises.push(fetch(url, {method: "GET"}))
-                }
-            }
-
-            if (data.length === urls.length) {
-                // got all required data
-                invoke(null, callback, data);
-                return;
-            }
-
-            Promise.all(promises).then(async function (requests) {
-                for (const request of requests) {
-                    const status = await request.status;
-                    const statusText = await request.statusText;
-                    const url = await request.url;
-                    const ext = url.split('.').pop();
-                    const type = fmt || _ext_fetch[ext] || "text";
-                    const item = {
-                        url: url,
-                        ext: ext,
-                        type: type,
-                    };
-                    if (status !== 200) {
-                        item["type"] = "error";
-                        item["error"] = new Error(`Error ${status} "${statusText}": ${url}`)
-                        data.push(item);
-                    } else {
-                        try {
-                            if (type === "text") item[type] = await request.text();
-                            if (type === "json") item[type] = await request.json();
-                            if (type === "blob") item[type] = await request.blob();
-                            if (type === "bytes") item[type] = await request.bytes();
-                            if (type === "arrayBuffer") item[type] = await request.arrayBuffer();
-                            data.push(item);
-                            _cache[url] = item;
-                        } catch (e) {
-                            data.push({
-                                url: url,
-                                error: e
-                            });
-                        }
-                    }
-                }
-                invoke(instance, callback, data);
-            }).catch(function (errors) {
-                data.push({
-                    error: errors
-                });
-                invoke(instance, callback, data);
-            });
-        } // fetchFn
-
-        function _solve(fetchResponses, callback) {
-            const solved = [];
-            const errors = [];
-            for (const response of fetchResponses) {
-                if (!!response.error) {
-                    errors.push(response.error);
-                } else {
-                    const ext = response["ext"];
-                    const type_fetch = response["type"]
-                    const fmt = _ext_solve[ext] || type_fetch;
-                    try {
-                        const item = {
-                            type: fmt
-                        };
-                        switch (fmt) {
-                            case "blob":
-                                // const objectURL = URL.createObjectURL(response["blob"]);
-                                // myImage.src = objectURL;
-                                item["value"] = response["blob"];
-                                break;
-                            case "bytes":
-                                // const text = new TextDecoder().decode(response["bytes"]);
-                                item["value"] = response["bytes"];
-                                break;
-                            case "arrayBuffer":
-                                item["value"] = response["arrayBuffer"];
-                                break;
-                            case "json":
-                                item["value"] = response["json"];
-                                break;
-                            case "script":
-                                const text = response["text"];
-                                const evaluated = eval(text);
-                                if (!!evaluated) {
-                                    item["value"] = evaluated;
-                                } else {
-                                    console.warn("_solve: Missing return or export statement!", response);
-                                }
-                                /**
-                                 let count = 0;
-                                 eachProp(evaluated, (k, v) => {
-                                 console.log(count, k, "=", v);
-                                 count++;
-                                 })
-                                 **/
-                                break;
-                            default:
-                                item["value"] = response["text"];
-                        }
-                        solved.push(item);
-                    } catch (e) {
-                        errors.push(e);
-                    }
-                }
-            }
-            invoke(instance, callback, solved, errors);
-        }
-
-        function require(rawUrls, callback, fmt) {
-            if (!!rawUrls) {
-                _fetchFn(fmt, rawUrls, function (responses) {
-                    _solve(responses, function (solved, errors) {
-                        const exports = {};
-                        let count = 0;
-                        for (const item of solved) {
-                            if (item["type"] === "script") {
-                                eachProp(item["value"], (k, v) => {
-                                    exports[k] = v;
-                                });
-                            } else {
-                                exports[count] = item["value"];
-                                count++;
-                            }
-                        }
-                        if (errors.length > 0) {
-                            invoke(instance, callback, exports, errors);
-                        } else {
-                            invoke(instance, callback, exports, false);
-                        }
-                    });
-                });
-            }
-        } // require
-
-        //-- assign --//
-        instance.require = require;
-        instance.require.config = configFn;
-    })(vanilla);
-
 
     // --------------------------
     //  VANILLA - template
