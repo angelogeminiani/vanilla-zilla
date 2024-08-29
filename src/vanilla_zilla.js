@@ -3,12 +3,12 @@
  *  ----------------
  *  Copyright: Gian Angelo Geminiani
  *  License: MIT
- *  Version: 0.0.2
+ *  Version: 0.0.3
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.2`;
+    const v = `0.0.3`;
     const vPrefix = "v-"
     const context = !!window ? window : false;
     const document = !!context ? context.document : false;
