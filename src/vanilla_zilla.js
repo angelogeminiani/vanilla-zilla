@@ -18,6 +18,7 @@
         return
     }
     // const
+    const attr_vuid = "data-vuid";
     const channel_zilla = "__zilla"; // internal channel for app communication
     const message_type_internal = "internal";
     const message_target_pages = "pages";
@@ -408,11 +409,6 @@
     // --------------------------
 
     const vanilla = {};
-    if (!context.module) {
-        context.module = {
-            exports: {}
-        };
-    }
 
     // --------------------------
     //  VANILLA - context
@@ -421,6 +417,7 @@
     (function initContext(instance) {
 
         //-- assign --//
+        instance.__ready__ = false;
         instance.version = v;
         instance.env = {
             name: name,
@@ -483,8 +480,8 @@
             }
         }
 
-        function invokeReady(thisArgs, callback, args){
-            console.log("DOM invokeReady");
+        function invokeReady(thisArgs, callback, args) {
+            // console.log("DOM invokeReady");
             invoke(thisArgs, callback, args);
         }
 
@@ -508,6 +505,24 @@
             return elem || get(!!comp ? comp.uid : str);
         }
 
+        function setId(arg, id) {
+            if (!!arg && !!id) {
+                if (isHTMLElement(arg)) {
+                    // set id if missing
+                    if (!arg.getAttribute("id")) {
+                        arg.setAttribute("id", id);
+                    }
+                    arg.setAttribute(attr_vuid, id);
+                    return arg;
+                }
+                if (isHTML(arg)) {
+                    return setId(createFromHTML(arg), id);
+                }
+                console.error(`dom.setId() -> Element not supported: "${arg}"`);
+            }
+            return null;
+        }
+
         /**
          * Return an Html element by ID
          * @param id ID of the html element to return
@@ -515,16 +530,24 @@
          */
         function get(id) {
             try {
-                const elem = isString(id) ? document.getElementById(id) : id;
-                if (!!elem) {
-                    return elem;
-                } else {
-                    console.error(`get() -> Element not found: "${id}"`);
+                if (isString(id)) {
+                    let elem = document.getElementById(id);
+                    if (!elem) {
+                        const elems = document.querySelectorAll(`[${attr_vuid}="${id}"]`);
+                        if (elems.length > 0) {
+                            elem = elems.item(0);
+                        }
+                    }
+                    if (!!elem) {
+                        return elem;
+                    } else {
+                        console.error(`dom.get() -> Element not found: "${id}"`);
+                    }
                 }
             } catch (err) {
-                console.error(`get() -> Error retrieving "${id}":`, err);
+                console.error(`dom.get() -> Error retrieving "${id}":`, err);
             }
-            return null;
+            return id;
         }
 
         function remove(id) {
@@ -548,7 +571,7 @@
                     return elem;
                 }
             } catch (err) {
-                console.error(`removeElemChildrenById() -> removing children from "${id}":`, err);
+                console.error(`dom.removeElemChildrenById() -> removing children from "${id}":`, err);
             }
             return null;
         }
@@ -557,8 +580,18 @@
             const div = document.createElement('div');
             div.innerHTML = htmlString.trim();
 
-            // Change this to div.childNodes to support multiple top-level nodes.
-            return div.firstElementChild;
+            // Return the primary node if it has multiple children
+            if (div.childElementCount > 1) {
+                // remove scripts
+                for (const elem of div.children) {
+                    if (elem.tagName.toLowerCase() === "script") {
+                        elem.remove();
+                    }
+                }
+                return div;
+            } else {
+                return div.firstElementChild;
+            }
         }
 
         /**
@@ -575,7 +608,7 @@
                     return elem;
                 }
             } catch (err) {
-                console.error(`setInnerHTMLById() -> inserting "${html}" into "${id}":`, err);
+                console.error(`dom.setInnerHTMLById() -> inserting "${html}" into "${id}":`, err);
             }
             return null;
         }
@@ -591,7 +624,7 @@
                     return elem;
                 }
             } catch (err) {
-                console.error(`appendElemChildById() -> adding child into "${id}":`, err)
+                console.error(`dom.appendElemChildById() -> adding child into "${id}":`, err)
             }
             return null;
         }
@@ -603,7 +636,7 @@
                     elem.classList.remove(className);
                 }
             } catch (err) {
-                console.error(`classRemove() -> adding child into "${id}":`, err)
+                console.error(`dom.classRemove() -> adding child into "${id}":`, err)
             }
             return null;
         }
@@ -615,7 +648,7 @@
                     elem.classList.add(className);
                 }
             } catch (err) {
-                console.error(`classAdd() -> adding class into "${id}":`, err)
+                console.error(`dom.classAdd() -> adding class into "${id}":`, err)
             }
             return null;
         }
@@ -636,7 +669,7 @@
                 target.appendChild(tag);
                 tag.appendChild(document.createTextNode(css));
             } catch (err) {
-                console.error(`tagAddStyle() -> adding style tag into header:`, err)
+                console.error(`dom.tagAddStyle() -> adding style tag into header:`, err)
             }
             return null;
         }
@@ -649,7 +682,7 @@
                 target.appendChild(tag);
                 tag.appendChild(document.createTextNode(text));
             } catch (err) {
-                console.error(`tagAddScript() -> adding script tag into header:`, err)
+                console.error(`dom.tagAddScript() -> adding script tag into header:`, err)
             }
             return null;
         }
@@ -696,6 +729,7 @@
             scripts: scriptsFn(),
             elem: elem,
             get: get,
+            setId: setId,
             remove: remove,
             removeChild: removeElemChildrenByIdFn,
             setInner: setElemInnerHTMLByIdFn,
@@ -1355,7 +1389,7 @@
                 try {
                     if (this.isConsistent()) {
                         if (!this._visible && !!this._elem) {
-                            this._elem.classList.remove("hidden");
+                            this._elem.classList.remove("vz-hidden");
                             this._visible = true;
                             if (!!effectFn) {
                                 invoke(this._elem, effectFn, this._elem, ...options);
@@ -1376,7 +1410,7 @@
                 try {
                     if (this.isConsistent()) {
                         if (this._visible) {
-                            this._elem.classList.add("hidden");
+                            this._elem.classList.add("vz-hidden");
                             this._visible = false;
                             if (!!effectFn) {
                                 invoke(this._elem, effectFn, this._elem, ...options);
@@ -1425,7 +1459,7 @@
                     this.off();
                     const elem = instance.dom.body();
                     elem.append(this._elem);
-                    this._elem.classList.add("hidden");
+                    this._elem.classList.add("vz-hidden");
                     this._detached = true;
                     this._visible = false;
                 } catch (err) {
@@ -1489,18 +1523,16 @@
                         const id = this._uid;
                         // assign HTMLElement
                         this._elem = elem;
-                        this._elem.classList.add("hidden");
+                        this._elem.classList.add("vz-hidden");
                         // set id if missing
-                        if (!this._elem.getAttribute("id")) {
-                            this._elem.setAttribute("id", id);
-                        }
+                        instance.dom.setId(this._elem, id);
                         // check all children components for appropriate id
                         instance.dom.each(elem, (el) => {
                             if (!!el) {
                                 const cid = el.getAttribute("id");
-                                if (!!cid && !isVUID(cid)) {
-                                    const vuid = toVUID(id, cid)
-                                    el.setAttribute("id", vuid);
+                                const tag = el.tagName.toLowerCase();
+                                if (!!cid && !isVUID(cid) && tag !== "script" && tag !== "style") {
+                                    instance.dom.setId(el, toVUID(id, cid));
                                 }
                             }
                         });
@@ -1687,7 +1719,7 @@
 
         class ViewLoader {
             constructor(name, url, model, parent) {
-                this._parentComponent = parent;
+                this._parent = parent;
                 this._name = name;
                 this._slug = slugify(name);
                 this._url = url;
@@ -1728,14 +1760,26 @@
                             const page = new ctr(model);
                             page.name = name;
                             page.attach(instance.dom.body());
-                            if (!!this._parentComponent) {
-                                const parent = await this._parentComponent.getElem();
+                            if (!!this._parent) {
+                                const parent = await this.__getElem(this._parent);
                                 page.attach(parent);
                             }
                             this._view_resolver.resolve(page);
                         });
                     }
+                }).catch((err)=>{
+                    console.error(`ViewLoader._init_loader() -> Error requiring page from "${url}": ${err}`);
                 });
+            }
+
+            async __getElem(v){
+                if (isComponent(v)){
+                    return await v.getElem();
+                }
+                if (isPromise(v)){
+                    return await v;
+                }
+                return instance.dom.elem(v);
             }
         }
 
@@ -1743,7 +1787,7 @@
 
         class ViewManager {
             constructor(parent) {
-                this._parentComponent = parent; // parent component. The owner of the view manager
+                this._parent = parent; // Parent component. The owner of the view manager and parent of views
                 this._view_promises = [];
                 this._curr_view_fn = null;
                 this._last_view_fn = null;
@@ -1753,13 +1797,21 @@
                 // console.log("ViewManager.ctr() parent:", this._parentComponent);
             }
 
+            get parent() {
+                return this._parent;
+            }
+
+            set parent(value) {
+                this._parent = value;
+            }
+
             push(...items) {
                 for (const item of items) {
                     const name = item["name"];
                     const url = item["url"];
                     const data = item["data"] || {};
                     if (!!name && !!url) {
-                        const pp = new ViewLoader(name, url, data, this._parentComponent)
+                        const pp = new ViewLoader(name, url, data, this._parent)
                         this._view_promises.push(pp);
                     }
                 }
@@ -2405,7 +2457,7 @@
                 const elem = instance.dom.elem(elemOrId);
                 if (!!elem) {
                     elem.style.opacity = "0";
-                    instance.dom.classRemove(elem, "hidden");
+                    instance.dom.classRemove(elem, "vz-hidden");
                     fadeIn(elemOrId, arg1, arg2);
                 }
             }
@@ -2533,23 +2585,51 @@
 
     (function init(instance) {
 
-        const _styles = `.hidden {visibility: hidden; display:none;}`;
+        const _styles = `.vz-hidden {visibility: hidden; display:none;} .vz-pointer{cursor:pointer;}`;
         // add styles to dom
         instance.dom.tagAddStyle(_styles);
 
     })(vanilla);
 
     // --------------------------
-    //  vanilla shortcuts
+    //  vanilla promise
     // --------------------------
 
-    vanilla.ready = vanilla.dom.ready;
+    vanilla.ready = function vanillaReady(callback) {
+        return new Promise((resolve, reject) => {
+            if (!!vanilla.__ready__) {
+                resolve(vanilla);
+                invoke(vanilla, callback, vanilla);
+            } else {
+                vanilla.dom.ready(() => {
+                    if (!vanilla.__ready__) {
+                        vanilla.__ready__ = true;
+                        // module exports
+                        if (!context.module) {
+                            context.module = {
+                                exports: {}
+                            };
+                            console.debug(`${name} v${v}: using internal export module.`, context.module);
+                        } else {
+                            console.debug(`${name} v${v}: export module inherited from.`, context.module);
+                        }
+                    }
+                    resolve(vanilla);
+                    invoke(vanilla, callback, vanilla);
+                });
+            }
+        });
+    }
 
     // --------------------------
     //  vanilla loaded
     // --------------------------
 
-    console.info(`${name} v${vanilla.version}`);
+    vanilla.ready().then(() => {
+        console.info(`${name} v${vanilla.version}: loaded!`);
+    }).catch((err) => {
+        console.error(`${name} v${v}: Error loading!`, err);
+    });
 
     // --------------------------
     //  exports
