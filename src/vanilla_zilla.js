@@ -448,23 +448,23 @@
 
                 function onReady() {
                     _is_ready = true;
-                    invoke(instance, callback, instance);
+                    invokeReady(instance, callback, instance);
                 }
 
                 if (!!_is_ready) {
-                    invoke(instance, callback, instance);
+                    invokeReady(instance, callback, instance);
                     return;
                 }
 
                 if (document.readyState === "complete") {
                     // Fully loaded!
                     _is_ready = true;
-                    invoke(instance, callback, instance);
+                    invokeReady(instance, callback, instance);
                 } else if (document.readyState === "interactive") {
                     // DOM ready! Images, frames, and other subresources are still downloading.
                     if (!!earlyInvoke) {
                         _is_ready = true;
-                        invoke(instance, callback, instance);
+                        invokeReady(instance, callback, instance);
                     }
                 } else {
                     // Loading still in progress.
@@ -474,13 +474,18 @@
                         if (!!earlyInvoke) {
                             context.removeEventListener("load", onReady);
                             _is_ready = true;
-                            invoke(instance, callback, instance);
+                            invokeReady(instance, callback, instance);
                         }
                     });
 
                     context.addEventListener("load", onReady);
                 }
             }
+        }
+
+        function invokeReady(thisArgs, callback, args){
+            console.log("DOM invokeReady");
+            invoke(thisArgs, callback, args);
         }
 
         /**
@@ -1029,7 +1034,7 @@
          *  DataLoader
          *  Load data from url passed into constructor
          */
-        class DataLoader extends Vanilla {
+        class DataWrapper extends Vanilla {
             constructor(v) {
                 super();
                 this._model = false; // empty fake model - no model loaded
@@ -1042,7 +1047,7 @@
              * Use onDataReceived in subclasses to handle event when data is received
              * @returns {Promise<Object>}
              */
-            async model() {
+            async get() {
                 return new Promise(async (resolve, reject) => {
                     if (!this._model) {
                         resolve(null);
@@ -1130,7 +1135,7 @@
 
         //-- assign --//
         instance.classes = {
-            DataLoader: DataLoader,
+            DataWrapper: DataWrapper,
         };
     })(vanilla);
 
@@ -1537,18 +1542,30 @@
                         response.catch((err) => {
                             self._ready_promise_resolver.reject(err);
                         }).then((item) => {
-                            self._ready_promise_resolver.resolve(self);
-                            self.__invoke_on_ready();
+                            const ready = self.__invoke_on_ready();
+                            if (isPromise(ready)) {
+                                ready.then(() => {
+                                    self._ready_promise_resolver.resolve(self);
+                                });
+                            } else {
+                                self._ready_promise_resolver.resolve(self);
+                            }
                         });
                     } else {
-                        self._ready_promise_resolver.resolve(self);
-                        self.__invoke_on_ready();
+                        const ready = self.__invoke_on_ready();
+                        if (isPromise(ready)) {
+                            ready.then(() => {
+                                self._ready_promise_resolver.resolve(self);
+                            });
+                        } else {
+                            self._ready_promise_resolver.resolve(self);
+                        }
                     }
                 }
             }
 
             __invoke_on_ready() {
-                invoke(this, this[on_ready]);
+                return invoke(this, this[on_ready]);
             }
 
         } // Component class
@@ -1726,12 +1743,14 @@
 
         class ViewManager {
             constructor(parent) {
-                this._parentComponent = parent; // parent component
+                this._parentComponent = parent; // parent component. The owner of the view manager
                 this._view_promises = [];
                 this._curr_view_fn = null;
                 this._last_view_fn = null;
                 this._curr_view = null;
                 this._last_view = null;
+
+                // console.log("ViewManager.ctr() parent:", this._parentComponent);
             }
 
             push(...items) {
@@ -1906,9 +1925,12 @@
              */
             async home() {
                 const page = await super.get(0);
-                const response = await super.__activateView(page, vanilla.effects.fadeIn);
-                this.__notify(page);
-                return response;
+                if (!!page) {
+                    const response = await super.__activateView(page, vanilla.effects.fadeIn);
+                    this.__notify(page);
+                    return response;
+                }
+                return null;
             }
 
             /**
