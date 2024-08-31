@@ -12,6 +12,7 @@
     const vPrefix = "v-"
     const context = !!window ? window : false;
     const document = !!context ? context.document : false;
+    const navigator = !!context ? context.navigator : false;
     // validate environment
     if (!document) {
         console.error("Invalid environment!");
@@ -67,6 +68,9 @@
             }
         }
     }
+    const isUndefined = function isUndefined(v) {
+        return v === undefined;
+    }
     const isArray = function isArray(item) {
         return ostring.call(item) === '[object Array]';
     };
@@ -109,14 +113,64 @@
     const isUrl = function isUrl(v) {
         return isString(v) && (v.startsWith("./") || v.startsWith("http"));
     }
+    const pathGetExt = function pathGetExt(url, defaultValue) {
+        defaultValue = defaultValue || "";
+        if (isString(url) && url.length > 3) {
+            const idx = url.lastIndexOf(".");
+            if (idx > 0) {
+                return url.substring(idx + 1) || defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+    const pathGetName = function pathGetName(url, stripExt) {
+        if (isString(url) && url.length > 3) {
+            const idx = url.lastIndexOf("/");
+            if (idx > 0) {
+                const fullName = url.substring(idx + 1);
+                if (!!stripExt) {
+                    const ext = pathGetExt(fullName);
+                    if (!!ext) {
+                        return fullName.replace("." + ext, "");
+                    }
+                }
+                return fullName;
+            }
+        }
+        return "";
+    }
     const isVUID = function isVUID(text) {
         return !!text && isString(text) && text.startsWith(vPrefix);
     }
     const toVUID = function toVUID(uid, v) {
         if (isString(v)) {
-            return isVUID(v) ? v : uid + "-" + v;
+            return isVUID(v) ? v : uid + "|" + v;
         }
         return v;
+    }
+    const parseVUID = function parseVUID(vuid) {
+        const response = {id: "", name: "", "raw": vuid};
+        const tokens = vuid.split("|");
+        response.id = tokens[0];
+        response.name = tokens[1] || "";
+        return response;
+    }
+    const urlWithExt = function urlWithExt(rawURL, ext) {
+        let response = rawURL;
+        if (!pathGetExt(response)) {
+            // add ui name and extension
+            const name = pathGetName(response, true);
+            if (!!name) {
+                response = `${response}/${name}.${ext}`;
+            }
+        }
+        return response;
+    }
+    const urlUI = function urlUI(rawURL) {
+        return urlWithExt(rawURL, "html");
+    }
+    const urlJS = function urlJS(rawURL) {
+        return urlWithExt(rawURL, "js");
     }
     const urlHref = function urlHref(url) {
         try {
@@ -179,6 +233,12 @@
             .replace(/\s+/g, '_') // replace spaces with underscores
             .replace(/-+/g, '_'); // remove consecutive
         return value
+    }
+    const matchHTMLElement = function matchHTMLElement(elem, id) {
+        if (isHTMLElement(elem)) {
+            return elem.getAttribute("id") === id || elem.getAttribute(attr_vuid) === id;
+        }
+        return false;
     }
     //-- utils arguments --//
     const argsSolve = function argsSolve(...args) {
@@ -339,6 +399,10 @@
             this._late_actions = []; // binding to execute after component is consistent (has HTML)
         }
 
+        get length() {
+            return this._late_actions.length;
+        }
+
         push(thisArg, func, ...args) {
             if (!!func) {
                 this._late_actions.push(func.bind(thisArg || this, ...args));
@@ -411,19 +475,231 @@
     const vanilla = {};
 
     // --------------------------
-    //  VANILLA - context
+    //  VANILLA - globals
     // --------------------------
 
+    // localization
+    const i18n = {};
+
     (function initContext(instance) {
+        const i18nDefaultLang = "en-US";
+        const i18nDefaultDateStyle = "medium"; // "full", "long", "medium", and "short"
+        const i18nDefaultTimeStyle = "medium";
+
+        //-- i18n --//
+        class i18nDictionary {
+            constructor(optData) {
+                this._dictionary = optData || {};
+            }
+
+            clear() {
+                this._dictionary = {};
+            }
+
+            load(data) {
+                const self = this;
+                if (!!data) {
+                    eachProp(data, (k, v) => {
+                        self.put(k, v);
+                    })
+                }
+            }
+
+            get(key) {
+                return this._dictionary[key] || "";
+            }
+
+            put(key, value) {
+                if (!!key && !!value) {
+                    this._dictionary[key] = value;
+                }
+            }
+        }
+
+        class i18nCtrl {
+            constructor() {
+                this._enabled = true;
+                this._locale = new Intl.Locale(i18nDefaultLang);
+                this._lang = "";
+                this._dateStyle = i18nDefaultDateStyle;
+                this._timeStyle = i18nDefaultTimeStyle;
+                this._dictionaries = {};
+                this.__initI18n();
+            }
+
+            get enabled() {
+                return this._enabled;
+            }
+
+            set enabled(enabled) {
+                this._enabled = enabled;
+                this.__initI18n(this._locale.language);
+            }
+
+            get dateStyle() {
+                return this._dateStyle;
+            }
+
+            set dateStyle(dateStyle) {
+                this._dateStyle = dateStyle;
+            }
+
+            get timeStyle() {
+                return this._timeStyle;
+            }
+
+            set timeStyle(timeStyle) {
+                this._timeStyle = timeStyle;
+            }
+
+            get lang() {
+                return this._locale.language;
+            }
+
+            set lang(l) {
+                if (!!l) {
+                    this.__initI18n(l);
+                }
+            }
+
+            get locale() {
+                return this._locale;
+            }
+
+            get dictionary() {
+                return this.getDictionary(this._lang);
+            }
+
+            normalize(lang) {
+                lang = lang || i18nDefaultLang
+                return lang === '*' ? lang : new Intl.Locale(lang).language || i18nDefaultLang;
+            }
+
+            getDictionary(lang) {
+                const n = this.normalize(lang);
+                if (!this._dictionaries[n]) {
+                    this._dictionaries[n] = new i18nDictionary({"vanilla": `${name} v${v}`});
+                }
+                return this._dictionaries[n];
+            }
+
+            //-- i18n fmt --//
+
+            fmtDate(dt, options) {
+                if (!!dt) {
+                    const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
+                    const fmt = !!opts
+                        ? new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], opts)
+                        : new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], {
+                            dateStyle: this._dateStyle
+                        });
+                    return fmt.format(dt);
+                }
+                return "";
+            }
+
+            fmtDateTime(dt, options) {
+                if (!!dt) {
+                    const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
+                    const fmt = !!opts
+                        ? new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], opts)
+                        : new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], {
+                            dateStyle: this._dateStyle,
+                            timeStyle: this._timeStyle
+                        });
+                    return fmt.format(dt);
+                }
+                return "";
+            }
+
+            fmtNumber(n, options) {
+                if (isNumber(n)) {
+                    const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
+                    const fmt = !!opts
+                        ? new Intl.NumberFormat([this._locale.language, i18nDefaultLang], opts)
+                        : new Intl.NumberFormat([this._locale.language, i18nDefaultLang])
+                    return fmt.format(n);
+                }
+                return n
+            }
+
+            //-- i18n dictionary --//
+
+            async load(fileName) {
+                const imports = await instance.require(fileName);
+                const data = imports[0];
+                if (!!data) {
+                    const dictionaries = data["dictionaries"];
+                    if (!!dictionaries) {
+                        eachProp(dictionaries, (k, v) => {
+                            const dictionary = this.getDictionary(k);
+                            dictionary.load(v);
+                        });
+                    }
+                }
+                return instance;
+            }
+
+            addLabel(key, value) {
+                const k = parseVUID(key);
+                this.dictionary.put(k.name || k.raw, value);
+            }
+
+            getLabel(key) {
+                return this.dictionary.get(key)||key;
+            }
+
+            //-- i18n PRIVATE --//
+
+            __initI18n(l) {
+                const lang = l || navigator.language || i18nDefaultLang;
+                this._locale = new Intl.Locale(lang);
+                if (this._lang !== this._locale.language) {
+                    this._lang = this._locale.language;
+                    this.dictionary.put("vanilla", `${name} v${v}`);
+                }
+                if (this._enabled) {
+                    console.debug(`${name} v${v}: i18n enabled.`,
+                        "language:", this._lang,
+                        "date:", this.fmtDateTime(new Date()),
+                        "number:", this.fmtNumber(1234567890.12345));
+                } else {
+                    console.debug(`${name} v${v}: i18n disabled.`);
+                }
+            }
+        }
+
+        const i18n_helper = new i18nCtrl();
+        i18n.enabled = (b) => {
+            if (!isUndefined(b)) {
+                i18n_helper.enabled = b;
+            }
+            return i18n_helper.enabled;
+        }; // property read, write
+        i18n.lang = (v) => {
+            if (!isString(v)) {
+                i18n_helper.language = v;
+            }
+            return i18n_helper.lang;
+        }; // property read, write
+        i18n.locale = () => i18n_helper.locale;   // property readonly
+        i18n.fmtDate = i18n_helper.fmtDate.bind(i18n_helper);
+        i18n.fmtDateTime = i18n_helper.fmtDateTime.bind(i18n_helper);
+        i18n.fmtNumber = i18n_helper.fmtNumber.bind(i18n_helper);
+        i18n.load = i18n_helper.load.bind(i18n_helper);
+        i18n.addLabel = i18n_helper.addLabel.bind(i18n_helper);
+        i18n.getLabel = i18n_helper.getLabel.bind(i18n_helper);
 
         //-- assign --//
         instance.__ready__ = false;
+        instance.i18n = i18n;
         instance.version = v;
         instance.env = {
             name: name,
             version: v,
             isBrowser: isBrowser,
             isWorker: isWebWorker,
+            context: context,
         };
     })(vanilla);
 
@@ -584,7 +860,8 @@
             if (div.childElementCount > 1) {
                 // remove scripts
                 for (const elem of div.children) {
-                    if (elem.tagName.toLowerCase() === "script") {
+                    const tagName = elem.tagName.toLowerCase();
+                    if (tagName === "script" || tagName === "meta" || tagName === "link" || tagName === "title") {
                         elem.remove();
                     }
                 }
@@ -692,7 +969,7 @@
             const parentElem = elem(parent);
             if (!!parentElem) {
                 each(parentElem, (elem) => {
-                    if (childId === elem.getAttribute("id")) {
+                    if (matchHTMLElement(elem, childId)) {
                         response = elem;
                         return true; // exit loop
                     }
@@ -738,6 +1015,7 @@
             classAdd: classAdd,
             tagAddStyle: tagAddStyle,
             tagAddScript: tagAddScript,
+            matchHTMLElement: matchHTMLElement,
             // children
             childOfById: childOfById,
             each: each,
@@ -772,6 +1050,7 @@
         const _config = {
             use_cache: true,
             limit: 700, // number of "require" of same url before to write a warning
+            enableSmartUrl: true,
         };
 
         function configFn(value) {
@@ -779,6 +1058,17 @@
                 _config[k] = v;
             });
             return _config;
+        }
+
+        function _smartURL(fmt, rawURL) {
+            const ext = pathGetExt(rawURL);
+            const type = fmt || _ext_fetch[ext || "js"] || "text";
+            const url = !!ext ? rawURL : urlJS(rawURL);
+            return {
+                "ext": ext || "js",
+                "type": type,
+                "url": url,
+            }
         }
 
         function _fetchFn(fmt, rawUrls, callback) {
@@ -791,9 +1081,10 @@
             const promises = [];
             const data = [];
             const limit = configFn().limit;
+            const smartUrls = configFn().enableSmartUrl;
 
             for (let url of urls) {
-                url = urlHref(url); // new URL(url, document.baseURI).href;
+                url = smartUrls ? _smartURL(fmt, urlHref(url)).url : urlHref(url);
                 _cache_count[url] = hasProp(_cache_count, url) ? _cache_count[url] + 1 : 1;
                 if (_cache_count[url] > limit) {
                     console.warn(`Component reached the limit of ${limit} requests: ${url}`);
@@ -817,7 +1108,7 @@
                     const status = await request.status;
                     const statusText = await request.statusText;
                     const url = await request.url;
-                    const ext = url.split('.').pop();
+                    const ext = pathGetExt(url, "js"); //url.split('.').pop();
                     const type = fmt || _ext_fetch[ext] || "text";
                     const item = {
                         url: url,
@@ -1233,7 +1524,7 @@
                         this.setElem(elem);
                     }
                 } else if (isUrl(value)) {
-                    const url = value;
+                    const url = urlUI(value);
                     this._elem_promise = new Promise((resolve, reject) => {
                         instance.require(url, (exports, errors) => {
                             if (!!errors) {
@@ -1248,6 +1539,8 @@
                                     reject(new Error((`Error creating page from "${url}". Unexpected returned value: ${html}`)));
                                 }
                             }
+                        }).catch((err) => {
+                            console.error(`Error creating page from "${url}"`, err);
                         });
                     });
                 } else {
@@ -1267,6 +1560,10 @@
             }
 
             async getElem() {
+                return this._elem_promise;
+            }
+
+            async render() {
                 return this._elem_promise;
             }
 
@@ -1767,16 +2064,16 @@
                             this._view_resolver.resolve(page);
                         });
                     }
-                }).catch((err)=>{
+                }).catch((err) => {
                     console.error(`ViewLoader._init_loader() -> Error requiring page from "${url}": ${err}`);
                 });
             }
 
-            async __getElem(v){
-                if (isComponent(v)){
+            async __getElem(v) {
+                if (isComponent(v)) {
                     return await v.getElem();
                 }
-                if (isPromise(v)){
+                if (isPromise(v)) {
                     return await v;
                 }
                 return instance.dom.elem(v);
@@ -1787,8 +2084,9 @@
 
         class ViewManager {
             constructor(parent) {
-                this._parent = parent; // Parent component. The owner of the view manager and parent of views
-                this._view_promises = [];
+                this._parent = parent;                  // Parent component. The owner of the view manager and parent of views
+                this._view_promises = [];               // all pushed views
+                this._late_actions = new Futures();     // all goto request with no pushed views
                 this._curr_view_fn = null;
                 this._last_view_fn = null;
                 this._curr_view = null;
@@ -1815,11 +2113,18 @@
                         this._view_promises.push(pp);
                     }
                 }
+
+                if (this._late_actions.length > 0) {
+                    this._late_actions.doAll();
+                }
+
+                // return number of promises
                 return this._view_promises.length;
             }
 
             /**
-             * Prepare views and return a Promise of BaseView array.
+             * Add views to list and promise to wait are all ready.
+             * Return a Promise of BaseView array.
              * @param items Vies to add to container
              * @returns {Promise<BaseView[]>}
              */
@@ -1880,9 +2185,15 @@
              */
             async goto(v, effectFn, ...options) {
                 if (!!v) {
-                    const page = await this.get(v);
-                    return await this.__activateView(page, effectFn, ...options);
+                    if (this._view_promises.length === 0) {
+                        // page requested, but still not added
+                        this._late_actions.push(this, this.goto, v, effectFn, ...options);
+                    } else {
+                        const page = await this.get(v);
+                        return await this.__activateView(page, effectFn, ...options);
+                    }
                 }
+                return null;
             }
 
             /**
@@ -2343,7 +2654,12 @@
             let str_html = template;
             for (const k in model) {
                 if (model.hasOwnProperty(k)) {
-                    const v = model[k];
+                    let v = model[k];
+                    // check i18n
+                    if(!!instance.i18n && instance.i18n.enabled()){
+                        v = instance.i18n.getLabel(v);
+                    }
+                    // replace
                     str_html = str_html.replaceAll(`${prefix + k + suffix}`, v);
                     str_html = str_html.replaceAll(`${prefix2 + k + suffix2}`, v);
                 }
@@ -2499,10 +2815,15 @@
         }
 
         function textBetween(text, prefix, suffix) {
-            if (isString(text) && isString(prefix) && isString(suffix) && !!prefix && !!suffix) {
-                const startIndex = text.indexOf(prefix) + prefix.length;
-                const endIndex = text.lastIndexOf(suffix) - 1;
-                return startIndex > -1 && endIndex > -1 ? text.substring(startIndex, endIndex).trim() : text.trim();
+            try {
+                if (isString(text) && isString(prefix) && isString(suffix) && !!prefix && !!suffix) {
+                    const si = text.indexOf(prefix);
+                    const startIndex = si > -1 ? si + prefix.length : -1;
+                    const endIndex = text.lastIndexOf(suffix) - 1;
+                    return startIndex > -1 && endIndex > -1 ? text.substring(startIndex, endIndex).trim() : text.trim();
+                }
+            } catch (err) {
+                console.error(`${name} v${v}: strings.textBetween() raised error.`, err);
             }
             return text;
         }
@@ -2535,8 +2856,21 @@
         }
 
         function bodyContent(textHtml) {
-            const content = instance.strings.textBetween(textHtml, "<body>", "</body>");
-            return content || textHtml;
+            try {
+                if (isString(textHtml)) {
+                    if (textHtml.indexOf("<body") > 0 || textHtml.indexOf("<BODY") > 0) {
+                        const doc = new DOMParser().parseFromString(textHtml, "text/html");
+                        return doc.body.innerHTML.trim();
+                    } else {
+                        // const response = /<body.*?>([\s\S]*)<\/body>/.exec(textHtml)[1];
+                        // return !!response = response : `<div>INVALID HTML CONTENT: "${ostring.call(textHtml)}"</div>`;
+                        return textHtml.trim();
+                    }
+                }
+            } catch (err) {
+                console.error(`${name} v${v}: html.bodyContent() raise error.`, err);
+            }
+            return `<div>INVALID HTML CONTENT: "${ostring.call(textHtml)}"</div>`;
         }
 
         //-- assign --//
