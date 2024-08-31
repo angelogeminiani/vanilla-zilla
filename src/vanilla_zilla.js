@@ -646,7 +646,7 @@
             }
 
             getLabel(key) {
-                return this.dictionary.get(key)||key;
+                return this.dictionary.get(key) || key;
             }
 
             //-- i18n PRIVATE --//
@@ -858,16 +858,39 @@
 
             // Return the primary node if it has multiple children
             if (div.childElementCount > 1) {
-                // remove scripts
-                for (const elem of div.children) {
+                // get scripts
+                const removable = [];
+                eachElem(div, (elem) => {
                     const tagName = elem.tagName.toLowerCase();
                     if (tagName === "script" || tagName === "meta" || tagName === "link" || tagName === "title") {
-                        elem.remove();
+                        removable.push(elem);
                     }
+                });
+                for (const elem of removable) {
+                    elem.remove();
                 }
+                removeAllComments(div);
                 return div;
             } else {
                 return div.firstElementChild;
+            }
+        }
+
+        function getAllCommentNodes(v) {
+            const rootElem = elem(v);
+            const comments = [];
+            const iterator = document.createNodeIterator(rootElem, NodeFilter.SHOW_COMMENT);
+            let curNode;
+            while (curNode = iterator.nextNode()) {
+                comments.push(curNode);
+            }
+            return comments;
+        }
+
+        function removeAllComments(v) {
+            const comments = getAllCommentNodes(v);
+            for (const elem of comments) {
+                elem.remove();
             }
         }
 
@@ -968,7 +991,7 @@
             let response = null;
             const parentElem = elem(parent);
             if (!!parentElem) {
-                each(parentElem, (elem) => {
+                eachElem(parentElem, (elem) => {
                     if (matchHTMLElement(elem, childId)) {
                         response = elem;
                         return true; // exit loop
@@ -980,14 +1003,14 @@
             return response;
         }
 
-        function each(id, callback) {
-            const el = elem(id);
+        function eachElem(v, callback) {
+            const el = elem(v);
             if (!!el && isFunction(callback)) {
                 if (invoke(instance, callback, el)) {
                     return;
                 }
                 for (const child of el.children) {
-                    each(child, callback);
+                    eachElem(child, callback);
                 }
             }
         }
@@ -1018,7 +1041,7 @@
             matchHTMLElement: matchHTMLElement,
             // children
             childOfById: childOfById,
-            each: each,
+            eachElem: eachElem,
             // special
             head: head,
             body: body,
@@ -1824,7 +1847,7 @@
                         // set id if missing
                         instance.dom.setId(this._elem, id);
                         // check all children components for appropriate id
-                        instance.dom.each(elem, (el) => {
+                        instance.dom.eachElem(elem, (el) => {
                             if (!!el) {
                                 const cid = el.getAttribute("id");
                                 const tag = el.tagName.toLowerCase();
@@ -2656,7 +2679,7 @@
                 if (model.hasOwnProperty(k)) {
                     let v = model[k];
                     // check i18n
-                    if(!!instance.i18n && instance.i18n.enabled()){
+                    if (!!instance.i18n && instance.i18n.enabled()) {
                         v = instance.i18n.getLabel(v);
                     }
                     // replace
