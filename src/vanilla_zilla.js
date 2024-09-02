@@ -10,6 +10,7 @@
     const name = "🦖 Vanilla-Zilla";
     const v = `0.0.3`;
     const vPrefix = "v-"
+    const vPrefixReplaceable = "v*"
     const context = !!window ? window : false;
     const document = !!context ? context.document : false;
     const navigator = !!context ? context.navigator : false;
@@ -83,6 +84,9 @@
     const isString = function isString(v) {
         return (typeof (v) === "string");
     };
+    const isDate = function isDate(v) {
+        return ostring.call(v) === '[object Date]';
+    };
     const isObject = function isObject(v) {
         return !isArray(v) && (typeof (v) === "object");
     };
@@ -139,11 +143,17 @@
         }
         return "";
     }
+    const isReplaceableId = function isReplaceableId(text) {
+        return !!text && isString(text) && text.startsWith(vPrefixReplaceable);
+    }
     const isVUID = function isVUID(text) {
         return !!text && isString(text) && text.startsWith(vPrefix);
     }
     const toVUID = function toVUID(uid, v) {
         if (isString(v)) {
+            if (isReplaceableId(v)) {
+                v = v.replaceAll(vPrefixReplaceable, "");
+            }
             return isVUID(v) ? v : uid + "|" + v;
         }
         return v;
@@ -239,6 +249,41 @@
             return elem.getAttribute("id") === id || elem.getAttribute(attr_vuid) === id;
         }
         return false;
+    }
+    const htmlEncode = function htmlEncode(input) {
+        const textArea = document.createElement("textarea");
+        textArea.innerText = input;
+        return textArea.innerHTML.split("<br>").join("\n") || "";
+    }
+    const htmlDecode = function htmlDecode(input) {
+        const doc = new DOMParser().parseFromString(input, "text/html");
+        return doc.documentElement.textContent || "";
+    }
+    const renderTpl = function renderTpl(template, model, _prefix, _suffix, transformerFn) {
+        // init context
+        const prefix = _prefix || "<%";
+        const suffix = _suffix || "%>";
+        const prefix2 = htmlEncode(prefix);
+        const suffix2 = htmlEncode(suffix);
+
+        // render the model into template
+        let str_html = template;
+        for (const k in model) {
+            if (model.hasOwnProperty(k)) {
+                let v = model[k];
+                // check external data transformer
+                if (isFunction(transformerFn)) {
+                    const vv = transformerFn(v);
+                    if (!!vv) {
+                        v = vv;
+                    }
+                }
+                // replace
+                str_html = str_html.replaceAll(`${prefix + k + suffix}`, v);
+                str_html = str_html.replaceAll(`${prefix2 + k + suffix2}`, v);
+            }
+        }
+        return str_html;
     }
     //-- utils arguments --//
     const argsSolve = function argsSolve(...args) {
@@ -469,6 +514,19 @@
     }
 
     // --------------------------
+    //  VANILLA - companion - Luxon
+    // --------------------------
+
+    const getLuxon = function getLuxon() {
+        if (!!luxon) {
+            return luxon;
+        } else {
+            console.warn(`${name} v${v}: luxon library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
+        }
+        return false;
+    }
+
+    // --------------------------
     //  VANILLA
     // --------------------------
 
@@ -481,10 +539,15 @@
     // localization
     const i18n = {};
 
-    (function initContext(instance) {
+    (function initGlobals(instance) {
+
         const i18nDefaultLang = "en-US";
         const i18nDefaultDateStyle = "medium"; // "full", "long", "medium", and "short"
         const i18nDefaultTimeStyle = "medium";
+
+        // template labels
+        const lblFrom = "tpl_from"; // "from <%from%>"
+        const lblFromTo = "tpl_from-to"; // "from <%from%> to <%to%>"
 
         //-- i18n --//
         class i18nDictionary {
@@ -521,6 +584,8 @@
                 this._enabled = true;
                 this._locale = new Intl.Locale(i18nDefaultLang);
                 this._lang = "";
+                this._languageNames = null;
+                this._regionNames = null;
                 this._dateStyle = i18nDefaultDateStyle;
                 this._timeStyle = i18nDefaultTimeStyle;
                 this._dictionaries = {};
@@ -578,28 +643,40 @@
             getDictionary(lang) {
                 const n = this.normalize(lang);
                 if (!this._dictionaries[n]) {
-                    this._dictionaries[n] = new i18nDictionary({"vanilla": `${name} v${v}`});
+                    this._dictionaries[n] = new i18nDictionary({
+                            "vanilla": `${name} v${v}`,
+                            "tpl_from": "from <%from%>",
+                            "tpl_from-to": "from <%from%> to <%to%>"
+                        }
+                    );
                 }
                 return this._dictionaries[n];
             }
 
             //-- i18n fmt --//
 
-            fmtDate(dt, options) {
-                if (!!dt) {
-                    const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
+            fmtDate(v, options) {
+                const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
+                if (isDate(v)) {
+                    const dt = v;
                     const fmt = !!opts
                         ? new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], opts)
                         : new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], {
                             dateStyle: this._dateStyle
                         });
                     return fmt.format(dt);
+                } else if (isString(v)) {
+                    const luxon = getLuxon();
+                    if (!!luxon) {
+                        const luxonDate = luxon.DateTime.fromISO(v);
+                        return luxonDate.setLocale(this._lang).toLocaleString("short");
+                    }
                 }
-                return "";
+                return v + "";
             }
 
             fmtDateTime(dt, options) {
-                if (!!dt) {
+                if (isDate(dt)) {
                     const opts = isString(options) ? {dateStyle: options} : isObject(options) ? options : null;
                     const fmt = !!opts
                         ? new Intl.DateTimeFormat([this._locale.language, i18nDefaultLang], opts)
@@ -621,6 +698,20 @@
                     return fmt.format(n);
                 }
                 return n
+            }
+
+            nameOfLang(code){
+                if(!!this._languageNames){
+                    return this._languageNames.of(code);
+                }
+                return code;
+            }
+
+            nameOfRegion(code){
+                if(!!this._regionNames){
+                    return this._regionNames.of(code);
+                }
+                return code;
             }
 
             //-- i18n dictionary --//
@@ -645,8 +736,19 @@
                 this.dictionary.put(k.name || k.raw, value);
             }
 
-            getLabel(key) {
-                return this.dictionary.get(key) || key;
+            getLabel(key, optModel) {
+                if (isString(key)) {
+                    const label = this.dictionary.get(key) || key;
+                    try {
+                        if (!!label && !!optModel) {
+                            return renderTpl(label, optModel);
+                        }
+                    } catch (e) {
+                        console.warn(`${name} v${v}: Error on i18n.getLabel("${key}")`, e);
+                    }
+                    return label;
+                }
+                return key;
             }
 
             //-- i18n PRIVATE --//
@@ -658,11 +760,19 @@
                     this._lang = this._locale.language;
                     this.dictionary.put("vanilla", `${name} v${v}`);
                 }
+                this._languageNames = new Intl.DisplayNames(this._lang, {
+                    type: 'language'
+                });
+                this._regionNames = new Intl.DisplayNames(this._lang, {
+                    type: 'region'
+                });
                 if (this._enabled) {
                     console.debug(`${name} v${v}: i18n enabled.`,
                         "language:", this._lang,
                         "date:", this.fmtDateTime(new Date()),
-                        "number:", this.fmtNumber(1234567890.12345));
+                        "number:", this.fmtNumber(1234567890.12345),
+                        "luxon:", !!luxon ? "Luxon installed!" : "Luxon not installed!",
+                    );
                 } else {
                     console.debug(`${name} v${v}: i18n disabled.`);
                 }
@@ -686,6 +796,8 @@
         i18n.fmtDate = i18n_helper.fmtDate.bind(i18n_helper);
         i18n.fmtDateTime = i18n_helper.fmtDateTime.bind(i18n_helper);
         i18n.fmtNumber = i18n_helper.fmtNumber.bind(i18n_helper);
+        i18n.nameOfLang = i18n_helper.nameOfLang.bind(i18n_helper);
+        i18n.nameOfRegion = i18n_helper.nameOfRegion.bind(i18n_helper);
         i18n.load = i18n_helper.load.bind(i18n_helper);
         i18n.addLabel = i18n_helper.addLabel.bind(i18n_helper);
         i18n.getLabel = i18n_helper.getLabel.bind(i18n_helper);
@@ -770,6 +882,32 @@
         }
 
 
+        /**
+         * Receive an input with an optional model and returns an HTMLElement
+         * @param args elem, html, vuid and model
+         * @returns {Promise<HTMLElement|null>}
+         */
+        async function solve(...args) {
+            const {elem, str, comp, obj, promise} = argsSolve(...args);
+            if (!!elem) {
+                return elem;
+            }
+            if (!!comp) {
+                return await comp.getElem();
+            }
+            if (!!promise) {
+                return await promise;
+            }
+            if (isString(str)) {
+                if (isHTML(str)) {
+                    const html = renderTpl(str, obj);
+                    return createFromHTML(html);
+                }
+                return get(str);
+            }
+            return null;
+        }
+
         function elem(arg) {
             if (isHTMLElement(arg)) {
                 return arg;
@@ -784,8 +922,9 @@
         function setId(arg, id) {
             if (!!arg && !!id) {
                 if (isHTMLElement(arg)) {
-                    // set id if missing
-                    if (!arg.getAttribute("id")) {
+                    // set id if missing or replaceable
+                    const attrId = arg.getAttribute("id")
+                    if (!attrId || isReplaceableId(attrId)) {
                         arg.setAttribute("id", id);
                     }
                     arg.setAttribute(attr_vuid, id);
@@ -1027,6 +1166,7 @@
         instance.dom = {
             ready: readyFn,
             scripts: scriptsFn(),
+            solve: solve,
             elem: elem,
             get: get,
             setId: setId,
@@ -1520,6 +1660,10 @@
                 return this._uid;
             }
 
+            get model() {
+                return this._model;
+            }
+
             get detached() {
                 return this._detached; // attached only to body, but not visible
             }
@@ -1582,6 +1726,10 @@
                 }
             }
 
+            /**
+             * Return HTMLElement of current component
+             * @returns {Promise<HTMLElement>}
+             */
             async getElem() {
                 return this._elem_promise;
             }
@@ -1658,13 +1806,11 @@
                 return !!this._elem && !!this._parent_elem && !this._detached;
             }
 
-            async childElem(id) {
-                const vid = toVUID(this._uid, id) // isVUID(id) ? id : this._uid + "-" + id;
-                const elem = await this.getElem()
-                if (!!elem) {
-                    return instance.dom.childOfById(elem, vid);
+            toVUID(v) {
+                if (isString(v) && !isHTML(v) && !isUrl(v) && !isVUID(v)) {
+                    return toVUID(this._uid, v);
                 }
-                return null;
+                return v;
             }
 
             attach(v) {
@@ -1704,6 +1850,36 @@
                 }
                 return this;
             }
+
+            detach() {
+                try {
+                    this.off();
+                    const elem = instance.dom.body();
+                    elem.append(this._elem);
+                    this._elem.classList.add("vz-hidden");
+                    this._detached = true;
+                    this._visible = false;
+                } catch (err) {
+                    console.error("BaseComponent.detach: ", err);
+                }
+                return false;
+            }
+
+            remove() {
+                try {
+                    this.off();
+                    this._elem.remove();
+                    this._elem = null;
+                    this._visible = false;
+                    this._model = null;
+                    return true;
+                } catch (err) {
+                    console.error("BaseComponent.remove: ", err);
+                }
+                return false;
+            }
+
+            //-- visibility --//
 
             show(effectFn, ...options) {
                 try {
@@ -1774,32 +1950,45 @@
                 return this;
             }
 
-            detach() {
-                try {
-                    this.off();
-                    const elem = instance.dom.body();
-                    elem.append(this._elem);
-                    this._elem.classList.add("vz-hidden");
-                    this._detached = true;
-                    this._visible = false;
-                } catch (err) {
-                    console.error("BaseComponent.detach: ", err);
+            //-- children --//
+
+            async childElem(id) {
+                const vid = this.toVUID(id) // isVUID(id) ? id : this._uid + "-" + id;
+                const elem = await this.getElem()
+                if (!!elem) {
+                    return instance.dom.childOfById(elem, vid);
                 }
-                return false;
+                return null;
             }
 
-            remove() {
-                try {
-                    this.off();
-                    this._elem.remove();
-                    this._elem = null;
-                    this._visible = false;
-                    this._model = null;
-                    return true;
-                } catch (err) {
-                    console.error("BaseComponent.remove: ", err);
+            async appendChild(...args) {
+                if (!!v) {
+                    let parent, elem, model;
+                    if (args.length === 3) {
+                        parent = await instance.dom.solve(this.toVUID(args[0]));
+                        elem = await instance.dom.solve(args[1], args[2] || {});
+                    } else if (args.length === 2) {
+                        if (isObject(args[1])) {
+                            parent = await this.getElem();
+                            elem = await instance.dom.solve(args[0], args[1]);
+                        } else {
+                            parent = await instance.dom.solve(this.toVUID(args[0]));
+                            elem = await instance.dom.solve(args[1]);
+                        }
+                    } else if (args.length === 1) {
+                        parent = await this.getElem();
+                        elem = await instance.dom.solve(args[0]);
+                    }
+                    if (!!parent) {
+                        if (!!elem) {
+                            parent.insertAdjacentElement("beforeend", elem);
+                        } else {
+                            console.warn(`${name} v${v}: ${this.name}.appendChild() -> Unable to solve element.`, v);
+                        }
+                    } else {
+                        console.warn(`${name} v${v}: ${this.name}.appendChild() -> Missing parent.`);
+                    }
                 }
-                return false;
             }
 
             //-- PRIVATE --//
@@ -2667,27 +2856,15 @@
         const _suffix = "%>";
 
         function render(template, model) {
-            // init context
-            const prefix = instance.template.TPL_PREFIX;
-            const suffix = instance.template.TPL_SUFFIX;
-            const prefix2 = instance.html.encode(prefix);
-            const suffix2 = instance.html.encode(suffix);
-
-            // render the model into template
-            let str_html = template;
-            for (const k in model) {
-                if (model.hasOwnProperty(k)) {
-                    let v = model[k];
+            return renderTpl(template, model, instance.template.TPL_PREFIX, instance.template.TPL_SUFFIX,
+                (v) => {
                     // check i18n
                     if (!!instance.i18n && instance.i18n.enabled()) {
-                        v = instance.i18n.getLabel(v);
+                        return instance.i18n.getLabel(v, model);
                     }
-                    // replace
-                    str_html = str_html.replaceAll(`${prefix + k + suffix}`, v);
-                    str_html = str_html.replaceAll(`${prefix2 + k + suffix2}`, v);
+                    return v;
                 }
-            }
-            return str_html;
+            );
         }
 
         //-- assigning --//
@@ -2868,14 +3045,11 @@
     (function initHTML(instance) {
 
         function decode(input) {
-            const doc = new DOMParser().parseFromString(input, "text/html");
-            return doc.documentElement.textContent || "";
+            return htmlDecode(input);
         }
 
         function encode(input) {
-            const textArea = document.createElement("textarea");
-            textArea.innerText = input;
-            return textArea.innerHTML.split("<br>").join("\n") || "";
+            return htmlEncode(input);
         }
 
         function bodyContent(textHtml) {
@@ -2920,6 +3094,7 @@
             isObject: isObject,
             isString: isString,
             isNumber: isNumber,
+            isDate: isDate,
             isHTMLElement: isHTMLElement,
             isUrl: isUrl,
             isView: isView,
