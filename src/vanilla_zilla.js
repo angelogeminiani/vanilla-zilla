@@ -81,6 +81,9 @@
     const isAsyncFunction = function isAsyncFunction(item) {
         return !!item && ostring.call(item) === '[object AsyncFunction]';
     };
+    const isCallable = function isCallable(item) {
+        return isFunction(item) || isAsyncFunction(item);
+    };
     const isString = function isString(v) {
         return (typeof (v) === "string");
     };
@@ -116,6 +119,9 @@
     }
     const isUrl = function isUrl(v) {
         return isString(v) && (v.startsWith("./") || v.startsWith("http"));
+    }
+    const isError = function isError(v) {
+        return !!v && v instanceof Error;
     }
     const pathGetExt = function pathGetExt(url, defaultValue) {
         defaultValue = defaultValue || "";
@@ -449,18 +455,34 @@
         }
 
         push(thisArg, func, ...args) {
-            if (!!func) {
-                this._late_actions.push(func.bind(thisArg || this, ...args));
+            const item = {thisArg: thisArg || this, action: false, callback: false};
+            if (isCallable(func)) {
+                item.action = func.bind(thisArg || this, ...args);
+                this._late_actions.push(item);
             }
+            return item;
         }
 
         doAll() {
             if (!!this._late_actions) {
-                each(this._late_actions, (action) => {
+                each(this._late_actions, (item) => {
                     try {
-                        action();
+                        if (isCallable(item.action)) {
+                            const response = item.action();
+                            if (isCallable(item.callback)) {
+                                if (isPromise(response)) {
+                                    response.then((response) => {
+                                        invoke(item.thisArg, item.callback, response);
+                                    }).catch((err) => {
+                                        invoke(item.thisArg, item.callback, err);
+                                    })
+                                } else {
+                                    invoke(item.thisArg, item.callback, response);
+                                }
+                            }
+                        }
                     } catch (err) {
-                        console.error("", err);
+                        console.error("Future.doAll()", err);
                     }
                 });
                 this._late_actions = [];
@@ -700,15 +722,15 @@
                 return n
             }
 
-            nameOfLang(code){
-                if(!!this._languageNames){
+            nameOfLang(code) {
+                if (!!this._languageNames) {
                     return this._languageNames.of(code);
                 }
                 return code;
             }
 
-            nameOfRegion(code){
-                if(!!this._regionNames){
+            nameOfRegion(code) {
+                if (!!this._regionNames) {
                     return this._regionNames.of(code);
                 }
                 return code;
@@ -2357,8 +2379,8 @@
 
             /**
              * Return a page by instance, name, slug or id
-             * @param v {int|string} index or name or slug or id
-             * @returns {BaseView}
+             * @param v {int|string|BaseView|Promise<BaseView>} index or name or slug or id
+             * @returns {Promise<BaseView>}
              */
             async get(v) {
                 if (isView(v)) {
@@ -2396,14 +2418,34 @@
              * @returns {Promise<BaseView>}
              */
             async goto(v, effectFn, ...options) {
-                if (!!v) {
-                    if (this._view_promises.length === 0) {
-                        // page requested, but still not added
-                        this._late_actions.push(this, this.goto, v, effectFn, ...options);
-                    } else {
-                        const page = await this.get(v);
-                        return await this.__activateView(page, effectFn, ...options);
-                    }
+                if (v !== undefined) {
+                    return await new Promise((resolve, reject) => {
+                        if (this._view_promises.length === 0) {
+                            // page requested, but still not added
+                            const item = this._late_actions.push(this, this.goto, v, effectFn, ...options);
+                            item.callback = function (response) {
+                                if (isError(response)) {
+                                    reject(response);
+                                } else {
+                                    resolve(response);
+                                }
+                            }
+                        } else {
+                            this.get(v).then((view) => {
+                                if (!!view) {
+                                    this.__activateView(view, effectFn, ...options).then(() => {
+                                        resolve(view);
+                                    }).catch((err) => {
+                                        reject(err);
+                                    });
+                                } else {
+                                    reject(new Error(`ViewManager.goto() -> View "${v}" not found!`));
+                                }
+                            }).catch((err) => {
+                                reject(err);
+                            });
+                        }
+                    });
                 }
                 return null;
             }
@@ -2413,8 +2455,7 @@
              * @returns {Promise<BaseView>}
              */
             async home() {
-                const page = await this.get(0);
-                return await this.__activateView(page, vanilla.effects.fadeIn);
+                return await this.goto(0, vanilla.effects.fadeIn);
             }
 
             /**
@@ -2486,12 +2527,9 @@
              * @returns {Promise<BaseView>}
              */
             async goto(v, effectFn, ...options) {
-                if (!!v) {
-                    const page = await super.get(v);
-                    const response = await super.__activateView(page, effectFn, ...options);
-                    this.__notify(page);
-                    return response;
-                }
+                const page = await super.goto(v, effectFn, ...options);
+                this.__notify(page);
+                return page;
             }
 
             /**
@@ -2499,11 +2537,10 @@
              * @returns {Promise<BaseView>}
              */
             async home() {
-                const page = await super.get(0);
+                const page = await super.home();
                 if (!!page) {
-                    const response = await super.__activateView(page, vanilla.effects.fadeIn);
                     this.__notify(page);
-                    return response;
+                    return page;
                 }
                 return null;
             }
