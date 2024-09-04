@@ -128,7 +128,11 @@
         if (isString(url) && url.length > 3) {
             const idx = url.lastIndexOf(".");
             if (idx > 0) {
-                return url.substring(idx + 1) || defaultValue;
+                const rawExt = url.substring(idx + 1) || defaultValue;
+                if (!!rawExt && rawExt.indexOf("?") > -1) {
+                    return rawExt.substring(0, rawExt.indexOf("?"));
+                }
+                return rawExt;
             }
         }
         return defaultValue;
@@ -436,6 +440,33 @@
         }
         return funcName;
     }
+    //-- utils arrays --//
+    const sortAsc = function sortAsc(arr, attrName) {
+        if (isArray(arr)) {
+            if (isString(attrName)) {
+                arr.sort((a, b) => {
+                    return a[attrName] - b[attrName];
+                });
+            } else {
+                arr.sort((a, b) => {
+                    return a - b;
+                });
+            }
+        }
+    }
+    const sortDesc = function sortDesc(arr, attrName) {
+        if (isArray(arr)) {
+            if (isString(attrName)) {
+                arr.sort((a, b) => {
+                    return b[attrName] - a[attrName];
+                });
+            } else {
+                arr.sort((a, b) => {
+                    return b - a;
+                });
+            }
+        }
+    }
 
     //-- types --//
     class Vanilla {
@@ -537,15 +568,40 @@
 
     // --------------------------
     //  VANILLA - companion - Luxon
+    //  https://moment.github.io/luxon/
     // --------------------------
 
     const getLuxon = function getLuxon() {
         if (!!luxon) {
             return luxon;
         } else {
-            console.warn(`${name} v${v}: luxon library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
+            console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
         }
         return false;
+    }
+
+    // --------------------------
+    //  VANILLA - companion - ShowDownJs
+    //  https://showdownjs.com/
+    // --------------------------
+
+    const getShowDown = function getShowDown(options) {
+        if (!!showdown) {
+            options = options || {noHeaderId: true, tables: true, simpleLineBreaks: true};
+            return new showdown.Converter(options);
+        } else {
+            console.warn(`${name} v${v}: 'showdown' markdown converter library disabled.\nSee at: https://showdownjs.com/`);
+        }
+        return false;
+    }
+    const mdToHTML = function mdToHTML(md, options) {
+        if (isString(md)) {
+            const converter = getShowDown(options);
+            if (!!converter) {
+                return converter.makeHtml(md);
+            }
+        }
+        return md;
     }
 
     // --------------------------
@@ -3144,6 +3200,11 @@
             uuid: uuid,
             argsSolve: argsSolve,
             argsSolveMultiple: argsSolveMultiple,
+            // arrays
+            sortAsc: sortAsc,
+            sortDesc: sortDesc,
+            // conversion
+            mdToHTML: mdToHTML,
         }
 
     })(vanilla);
