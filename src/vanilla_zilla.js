@@ -3,15 +3,15 @@
  *  ----------------
  *  Copyright: Gian Angelo Geminiani
  *  License: MIT
- *  Version: 0.0.3
+ *  Version: 0.0.4
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.3`;
+    const v = `0.0.4`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
-    const context = !!window ? window : false;
+    const context = (typeof window !== 'undefined') ? window : false;
     const document = !!context ? context.document : false;
     const navigator = !!context ? context.navigator : false;
     // validate environment
@@ -573,7 +573,7 @@
 
     const getLuxon = function getLuxon() {
         try {
-            if (!!luxon) {
+            if (typeof luxon !== 'undefined')  {
                 return luxon;
             } else {
                 console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
