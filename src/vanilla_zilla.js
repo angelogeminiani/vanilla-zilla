@@ -2,13 +2,14 @@
  *  VANILLA ZILLA
  *  ----------------
  *  Copyright: Gian Angelo Geminiani
+ *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.4
+ *  Version: 0.0.5
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.4`;
+    const v = `0.0.5`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
