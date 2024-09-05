@@ -572,10 +572,13 @@
     // --------------------------
 
     const getLuxon = function getLuxon() {
-        if (!!luxon) {
-            return luxon;
-        } else {
-            console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
+        try {
+            if (!!luxon) {
+                return luxon;
+            } else {
+                console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
+            }
+        } catch (e) {
         }
         return false;
     }
@@ -748,6 +751,8 @@
                     if (!!luxon) {
                         const luxonDate = luxon.DateTime.fromISO(v);
                         return luxonDate.setLocale(this._lang).toLocaleString("short");
+                    } else {
+                        return v;
                     }
                 }
                 return v + "";
