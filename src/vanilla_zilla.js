@@ -850,6 +850,7 @@
                     type: 'region'
                 });
                 if (this._enabled) {
+                    const luxon = getLuxon();
                     console.debug(`${name} v${v}: i18n enabled.`,
                         "language:", this._lang,
                         "date:", this.fmtDateTime(new Date()),
