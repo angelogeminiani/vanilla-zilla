@@ -574,7 +574,7 @@
 
     const getLuxon = function getLuxon() {
         try {
-            if (typeof luxon !== 'undefined')  {
+            if (typeof luxon !== 'undefined') {
                 return luxon;
             } else {
                 console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
@@ -1705,10 +1705,172 @@
             }
         }
 
+        //-- Queue/Event Manager --//
+
+        class QueueListener extends Vanilla {
+            constructor() {
+                super();
+                this._channelName = "*"; // alla channels
+                this._subscription = null;
+                this._func = null; // binding callback
+                this._args = [];
+            }
+
+            get channel() {
+                return this._channelName;
+            }
+
+            set channel(v) {
+                this._channelName = v || "*";
+            }
+
+            get subscription() {
+                return this._subscription;
+            }
+
+            set subscription(v) {
+                this._subscription = v;
+            }
+
+            get func() {
+                return this._func;
+            }
+
+            bind(fn, ...bindable) {
+                if (isFunction(fn)) {
+                    this._func = fn;
+                    this._args.push(...bindable);
+                }
+            }
+        }
+
+        class QueueSubscription {
+            constructor(...args) {
+                this._id = "";
+                this._channel = "";
+                if (!!args && args.length > 0) {
+                    this._channel = args[0];
+                    this._id = args[1] || "";
+                    if (isFunction(this._id)) {
+                        this._id = this._id.name || "";
+                    }
+                }
+            }
+
+            get id() {
+                return this._id || "*";
+            }
+
+            set id(v) {
+                this._id = v;
+            }
+
+            get channel() {
+                return this._channel || "*";
+            }
+
+            set channel(v) {
+                this._channel = v;
+            }
+        }
+
+        class QueueManager {
+            constructor() {
+                this._listeners = [];
+            }
+
+            publish(channelName, data) {
+                invokeAsync(this, (channelName, data) => {
+                    channelName = channelName || "*";
+                    for (const listener of this._listeners) {
+                        const subscription = listener.subscription;
+                        if (subscription.channel === "*" || subscription.channel === channelName || channelName === "*") {
+                            const sender = new QueueSubscription(channelName, subscription.id);
+                            invokeAsync(this, listener.func, sender, data, ...listener._args);
+                        }
+                    }
+                }, channelName, data);
+            }
+
+            subscribe(channelName, func, ...bindable) {
+                channelName = channelName || "*";
+                const subscription = new QueueSubscription();
+                if (isFunction(func)) {
+                    subscription.id = setFunctionName(func, uuid());
+                    subscription.channel = channelName;
+                    const listener = new QueueListener();
+                    listener.subscription = subscription;
+                    listener.channel = channelName;
+                    listener.bind(func, ...bindable);
+                    this._listeners.push(listener);
+                }
+                return subscription;
+            }
+
+            unsubscribe(...args) {
+                const unsubscribed = [];
+                if (!!args && args.length > 0) {
+                    const subscription = args[0] instanceof QueueSubscription ? args[0] : new QueueSubscription(...args);
+                    // clone listeners and empty original
+                    const listeners = [...this._listeners];
+                    this._listeners = [];
+                    // insert only listeners not removed
+                    for (const listener of listeners) {
+                        const sub = !!listener ? listener.subscription : null;
+                        if (!!sub) {
+                            const matchFunction = sub.id === subscription.id || subscription.id === "*";
+                            const matchChannel = sub.channel === subscription.channel || subscription.channel === "*";
+                            const match = matchChannel && matchFunction;
+                            if (!match) {
+                                this._listeners.push(listener);
+                            } else {
+                                unsubscribed.push(sub);
+                            }
+                        }
+                    }
+                }
+                return unsubscribed;
+            }
+
+            clear() {
+                this._listeners = [];
+            }
+
+        } // QueueManager
+
+        //-- vanilla store --//
+
+        class VanillaStore extends Vanilla {
+            constructor(messageQueue) {
+                super();
+                this._model = {}; // data
+                this._messageQueue = messageQueue || new QueueManager();
+            }
+
+            // expose message queue.
+            get messages() {
+                return this._messageQueue;
+            }
+
+            set(name, value) {
+                if (this._model[name] !== undefined) {
+                    // send change state event
+
+                }
+                this._model[name] = value;
+            }
+
+            get(name) {
+                return this._model[name];
+            }
+
+        }
 
         //-- assign --//
         instance.classes = {
             DataWrapper: DataWrapper,
+            QueueManager: QueueManager,
+            VanillaStore: VanillaStore,
         };
     })(vanilla);
 
@@ -1743,6 +1905,16 @@
 
             get uid() {
                 return this._uid;
+            }
+
+            set uid(v) {
+                if (!!v && isString(v)) {
+
+                    this._uid = v;
+                    if (!this._model["uid"]) {
+                        this._model["uid"] = this._uid;
+                    }
+                }
             }
 
             get model() {
@@ -1906,7 +2078,7 @@
                         // const vid = toVUID(this._uid, id) // isVUID(id) ? id : this._uid + "-" + id;
                         const parent = !!elem ? elem
                             : !!promise ? promise
-                                : !!str ? instance.dom.get(toVUID(this._uid, v))
+                                : !!str ? instance.dom.get(this.toVUID(str))
                                     : !!comp ? comp.getElem() : v;
                         if (isHTMLElement(parent)) {
                             // parent is valid HTMLElement
@@ -2099,10 +2271,7 @@
                     }
                     elem.innerHTML = this._renderHtml(elem.innerHTML);
                     if (!!elem.getAttribute("id")) {
-                        this._uid = elem.getAttribute("id");
-                        if (!this._model["uid"]) {
-                            this._model["uid"] = this._uid;
-                        }
+                        this.uid = elem.getAttribute("id");
                     } else {
                         elem.setAttribute("id", this._uid);
                     }
@@ -2655,138 +2824,6 @@
             }
         } // Page Manager
 
-        //-- Queue/Event Manager --//
-
-        class QueueListener extends Vanilla {
-            constructor() {
-                super();
-                this._channelName = "*"; // alla channels
-                this._subscription = null;
-                this._func = null; // binding callback
-                this._args = [];
-            }
-
-            get channel() {
-                return this._channelName;
-            }
-
-            set channel(v) {
-                this._channelName = v || "*";
-            }
-
-            get subscription() {
-                return this._subscription;
-            }
-
-            set subscription(v) {
-                this._subscription = v;
-            }
-
-            get func() {
-                return this._func;
-            }
-
-            bind(fn, ...bindable) {
-                if (isFunction(fn)) {
-                    this._func = fn;
-                    this._args.push(...bindable);
-                }
-            }
-        }
-
-        class QueueSubscription {
-            constructor(...args) {
-                this._id = "";
-                this._channel = "";
-                if (!!args && args.length > 0) {
-                    this._channel = args[0];
-                    this._id = args[1] || "";
-                    if (isFunction(this._id)) {
-                        this._id = this._id.name || "";
-                    }
-                }
-            }
-
-            get id() {
-                return this._id || "*";
-            }
-
-            set id(v) {
-                this._id = v;
-            }
-
-            get channel() {
-                return this._channel || "*";
-            }
-
-            set channel(v) {
-                this._channel = v;
-            }
-        }
-
-        class QueueManager {
-            constructor() {
-                this._listeners = [];
-            }
-
-            publish(channelName, data) {
-                invokeAsync(this, (channelName, data) => {
-                    channelName = channelName || "*";
-                    for (const listener of this._listeners) {
-                        const subscription = listener.subscription;
-                        if (subscription.channel === "*" || subscription.channel === channelName || channelName === "*") {
-                            const sender = new QueueSubscription(channelName, subscription.id);
-                            invokeAsync(this, listener.func, sender, data, ...listener._args);
-                        }
-                    }
-                }, channelName, data);
-            }
-
-            subscribe(channelName, func, ...bindable) {
-                channelName = channelName || "*";
-                const subscription = new QueueSubscription();
-                if (isFunction(func)) {
-                    subscription.id = setFunctionName(func, uuid());
-                    subscription.channel = channelName;
-                    const listener = new QueueListener();
-                    listener.subscription = subscription;
-                    listener.channel = channelName;
-                    listener.bind(func, ...bindable);
-                    this._listeners.push(listener);
-                }
-                return subscription;
-            }
-
-            unsubscribe(...args) {
-                const unsubscribed = [];
-                if (!!args && args.length > 0) {
-                    const subscription = args[0] instanceof QueueSubscription ? args[0] : new QueueSubscription(...args);
-                    // clone listeners and empty original
-                    const listeners = [...this._listeners];
-                    this._listeners = [];
-                    // insert only listeners not removed
-                    for (const listener of listeners) {
-                        const sub = !!listener ? listener.subscription : null;
-                        if (!!sub) {
-                            const matchFunction = sub.id === subscription.id || subscription.id === "*";
-                            const matchChannel = sub.channel === subscription.channel || subscription.channel === "*";
-                            const match = matchChannel && matchFunction;
-                            if (!match) {
-                                this._listeners.push(listener);
-                            } else {
-                                unsubscribed.push(sub);
-                            }
-                        }
-                    }
-                }
-                return unsubscribed;
-            }
-
-            clear() {
-                this._listeners = [];
-            }
-
-        } // QueueManager
 
         //-- App --//
 
@@ -2795,6 +2832,7 @@
                 super();
                 this._pages = pages;
                 this._messages = messages;
+                this._state = new instance.classes.VanillaStore();
             }
 
             get pages() {
@@ -2805,6 +2843,10 @@
                 return this._messages;
             }
 
+            get state() {
+                return this._state;
+            }
+
             async ready() {
                 await this._pages.ready();
                 return this;
@@ -2812,7 +2854,7 @@
 
         }
 
-        const messages = new QueueManager();
+        const messages = new instance.classes.QueueManager();
         const pages = new PageManager();
 
         //-- assign --//
