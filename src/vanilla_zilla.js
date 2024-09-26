@@ -1703,6 +1703,26 @@
                 }
                 return data;
             }
+
+            /**
+             * Wrap and wait for the result
+             * @param v
+             * @returns {Object}
+             */
+            static async wait(v){
+                const instance = new DataWrapper(v)
+                return await instance.get();
+            }
+
+            /**
+             * Wrap data and return a promise
+             * @param v
+             * @returns {Promise<Object>}
+             */
+            static wrap(v){
+                const instance = new DataWrapper(v)
+                return instance.get();
+            }
         }
 
         //-- Queue/Event Manager --//
