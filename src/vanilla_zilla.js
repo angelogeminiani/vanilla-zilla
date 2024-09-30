@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.7`;
+    const v = `0.0.8`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -1603,8 +1603,134 @@
 
     (function initClasses(instance) {
 
+        //-- vanilla timer --//
+
+        class VanillaTimer extends Vanilla {
+            constructor(interval_ms) {
+                super();
+
+                this._interval_ms = interval_ms || 0;
+                this._timer = null;
+                this._callback = null;
+                this._args = [];
+            }
+
+            set interval(v) {
+                this._interval_ms = v;
+            }
+
+            get interval() {
+                return this._interval_ms;
+            }
+
+            set callback(f) {
+                this._callback = f;
+            }
+
+            get callback() {
+                return this._callback
+            }
+
+            /**
+             * Start the timer.
+             * Usage:
+             * timer.start(function);
+             * timer.start(interval, function);
+             * timer.start(interval, function, param1, param2, param3...)
+             * timer.start(param1, param2, param3...)
+             * @param args
+             * @returns {boolean}
+             */
+            start(...args) {
+                if (!this._timer) {
+                    this._init(...args);
+                    if (this._is_runnable()) {
+                        this._timer = setInterval(this._callback, this._interval_ms);
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            stop() {
+                if (!!this._timer) {
+                    clearInterval(this._timer);
+                    this._timer = null;
+                }
+            }
+
+            /**
+             * Start a timer.
+             * @param args
+             * @returns {VanillaTimer|null}
+             */
+            static run(...args) {
+                const timer = new VanillaTimer();
+                if (timer.start(...args)) {
+                    return timer;
+                }
+                return null;
+            }
+
+            _is_runnable() {
+                return isFunction(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
+            }
+
+            _init(...args) {
+                this._args = [];
+                if (this._is_runnable()) {
+                    this._args.push(...args);
+                    return;
+                }
+
+                if (!!args && args.length > 0) {
+                    let count = 0
+                    for (const arg of args) {
+                        count++;
+                        if (isFunction(arg) && count < 3) {
+                            this._callback = arg;
+                            continue;
+                        }
+                        if (isNumber(arg) && count < 3) {
+                            this._interval_ms = arg;
+                            continue;
+                        }
+                        this._args.push(arg);
+                    }
+                }
+            }
+        }
+
+        //-- vanilla store --//
+
+        class VanillaStore extends Vanilla {
+            constructor(messageQueue) {
+                super();
+                this._model = {}; // data
+                this._messageQueue = messageQueue || new QueueManager();
+            }
+
+            // expose message queue.
+            get messages() {
+                return this._messageQueue;
+            }
+
+            set(name, value) {
+                if (this._model[name] !== undefined) {
+                    // send change state event
+
+                }
+                this._model[name] = value;
+            }
+
+            get(name) {
+                return this._model[name];
+            }
+
+        }
+
         /**
-         *  DataLoader
+         *  DataWrapper
          *  Load data from url passed into constructor
          */
         class DataWrapper extends Vanilla {
@@ -1614,6 +1740,7 @@
                 this._created = false;
                 this.__require(v);
             }
+
 
             /**
              * Return the current model.
@@ -1722,6 +1849,120 @@
             static wrap(v) {
                 const instance = new DataWrapper(v)
                 return instance.get();
+            }
+        }
+
+        /**
+         *  DataPing
+         *  Create a timer and ping data each "interval".
+         *  If property "path" is assigned, the callback event is called only if
+         *  the latest value is different from previous.
+         */
+        class DataPing extends Vanilla {
+            constructor(options) {
+                super();
+                this._url = options.url;
+                this._interval_ms = options.interval;
+                this._callback = options.callback;
+                this._model_path = options.path;
+                this._timer = null;
+                this._latest_model_value = null;
+                this._error = null;
+            }
+
+            set url(v) {
+                this._url = v;
+            }
+
+            get url() {
+                return this._url;
+            }
+
+            set interval(v) {
+                this._interval_ms = v;
+            }
+
+            get interval() {
+                return this._interval_ms;
+            }
+
+            set callback(f) {
+                this._callback = f;
+            }
+
+            get callback() {
+                return this._callback
+            }
+
+            set path(v) {
+                this._model_path = v;
+            }
+
+            get path() {
+                return this._model_path;
+            }
+
+            get error() {
+                return this._error;
+            }
+
+            start() {
+                const self = this;
+                self._error = null;
+                if (!this._timer && this._is_runnable()) {
+                    // timed ping
+                    this._timer = VanillaTimer.run(async function () {
+                        try {
+                            // get data
+                            await self._ping_data.bind(self)();
+                        } catch (err) {
+                            self._error = err;
+                            console.error("DataPing.start() Error: ", err);
+                        }
+                    }, this._interval_ms);
+                    // immediate ping
+                    self._ping_data.bind(self)().catch((err) => {
+                        self._error = err;
+                        console.error("DataPing.start() Error: ", err);
+                    });
+                    return true;
+                }
+                return false;
+            }
+
+            stop() {
+                if (!!this._timer) {
+                    this._timer.stop();
+                    this._timer = null;
+                }
+            }
+
+            static run(url, callback, interval_ms, path) {
+                const instance = new DataPing();
+                instance.url = url;
+                instance.callback = callback;
+                instance.interval = interval_ms || 10 * 1000;
+                instance.path = path;
+                instance.start();
+                return instance;
+            }
+
+            _is_runnable() {
+                return !!this._url && isFunction(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
+            }
+
+            async _ping_data() {
+                const model = await DataWrapper.wrap(this._url);
+                if (!!model) {
+                    const data = !!this._model_path ? model[this._model_path] : model;
+                    const data_str = JSON.stringify(data);
+                    if (!this._latest_model_value || (!!data && data_str !== this._latest_model_value)) {
+                        this._latest_model_value = data_str;
+                        if (isFunction(this._callback)) {
+                            this._callback(data);
+                        }
+                    }
+                }
             }
         }
 
@@ -1858,39 +2099,14 @@
 
         } // QueueManager
 
-        //-- vanilla store --//
-
-        class VanillaStore extends Vanilla {
-            constructor(messageQueue) {
-                super();
-                this._model = {}; // data
-                this._messageQueue = messageQueue || new QueueManager();
-            }
-
-            // expose message queue.
-            get messages() {
-                return this._messageQueue;
-            }
-
-            set(name, value) {
-                if (this._model[name] !== undefined) {
-                    // send change state event
-
-                }
-                this._model[name] = value;
-            }
-
-            get(name) {
-                return this._model[name];
-            }
-
-        }
 
         //-- assign --//
         instance.classes = {
-            DataWrapper: DataWrapper,
-            QueueManager: QueueManager,
             VanillaStore: VanillaStore,
+            VanillaTimer: VanillaTimer,
+            DataWrapper: DataWrapper,
+            DataPing: DataPing,
+            QueueManager: QueueManager,
         };
     })(vanilla);
 
