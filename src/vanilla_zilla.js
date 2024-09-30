@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.6`;
+    const v = `0.0.7`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -1709,7 +1709,7 @@
              * @param v
              * @returns {Object}
              */
-            static async wait(v){
+            static async wait(v) {
                 const instance = new DataWrapper(v)
                 return await instance.get();
             }
@@ -1719,7 +1719,7 @@
              * @param v
              * @returns {Promise<Object>}
              */
-            static wrap(v){
+            static wrap(v) {
                 const instance = new DataWrapper(v)
                 return instance.get();
             }
@@ -2265,6 +2265,13 @@
                     } else {
                         console.warn(`${name} v${v}: ${this.name}.appendChild() -> Missing parent.`);
                     }
+                }
+            }
+
+            async childInner(id, content) {
+                const elem = await this.childElem(id);
+                if (!!elem) {
+                    elem.innerHTML = content;
                 }
             }
 
