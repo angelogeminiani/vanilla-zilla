@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.9`;
+    const v = `0.0.10`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -1673,7 +1673,7 @@
             }
 
             _is_runnable() {
-                return isFunction(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
+                return isCallable(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
             }
 
             _init(...args) {
@@ -1948,7 +1948,7 @@
             }
 
             _is_runnable() {
-                return !!this._url && isFunction(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
+                return !!this._url && isCallable(this._callback) && isNumber(this._interval_ms) && this._interval_ms > 0;
             }
 
             async _ping_data() {
@@ -1958,8 +1958,8 @@
                     const data_str = JSON.stringify(data);
                     if (!this._latest_model_value || (!!data && data_str !== this._latest_model_value)) {
                         this._latest_model_value = data_str;
-                        if (isFunction(this._callback)) {
-                            this._callback(data);
+                        if (!!this._callback && isCallable(this._callback)) {
+                            invoke(this, this._callback, data);
                         }
                     }
                 }
