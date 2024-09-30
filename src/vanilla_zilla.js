@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.8`;
+    const v = `0.0.9`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -1861,10 +1861,10 @@
         class DataPing extends Vanilla {
             constructor(options) {
                 super();
-                this._url = options.url;
-                this._interval_ms = options.interval;
-                this._callback = options.callback;
-                this._model_path = options.path;
+                this._url = !!options ? options.url : "";
+                this._interval_ms = !!options ? options.interval : 3000;
+                this._callback = !!options ? options.options.callback : null;
+                this._model_path = !!options ? options.options.path : "";
                 this._timer = null;
                 this._latest_model_value = null;
                 this._error = null;
@@ -1954,7 +1954,7 @@
             async _ping_data() {
                 const model = await DataWrapper.wrap(this._url);
                 if (!!model) {
-                    const data = !!this._model_path ? model[this._model_path] : model;
+                    const data = !!this._model_path ? getDeep(model, this._model_path) : model;
                     const data_str = JSON.stringify(data);
                     if (!this._latest_model_value || (!!data && data_str !== this._latest_model_value)) {
                         this._latest_model_value = data_str;
