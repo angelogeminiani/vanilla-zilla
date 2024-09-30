@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.10`;
+    const v = `0.0.11`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -1687,7 +1687,7 @@
                     let count = 0
                     for (const arg of args) {
                         count++;
-                        if (isFunction(arg) && count < 3) {
+                        if (isCallable(arg) && count < 3) {
                             this._callback = arg;
                             continue;
                         }
