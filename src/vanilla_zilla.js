@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.11`;
+    const v = `0.0.12`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -295,6 +295,12 @@
             }
         }
         return str_html;
+    }
+    const timestamp = function timestamp() {
+        return new Date().getTime();
+    }
+    const timestampUnix = function timestampUnix() {
+        return timestamp() / 1000;
     }
     //-- utils arguments --//
     const argsSolve = function argsSolve(...args) {
@@ -1952,7 +1958,8 @@
             }
 
             async _ping_data() {
-                const model = await DataWrapper.wrap(this._url);
+                const url = this._url + "?t=" + timestamp();
+                const model = await DataWrapper.wrap(url);
                 if (!!model) {
                     const data = !!this._model_path ? getDeep(model, this._model_path) : model;
                     const data_str = JSON.stringify(data);
