@@ -2268,10 +2268,27 @@
                 }
             }
 
-            async childInner(id, content) {
+            /**
+             * Set children inner HTML or attribute value
+             * @param id children ID or VUID
+             * @param args attribute and content or only content
+             * @returns {Promise<void>}
+             */
+            async childSet(id, ...args) {
                 const elem = await this.childElem(id);
                 if (!!elem) {
-                    elem.innerHTML = content;
+                    let attr, content;
+                    if (args.length === 2) {
+                        attr = args[0];
+                        content = args[1];
+                    } else if (args.length === 1) {
+                        content = args[0];
+                    }
+                    if (!!attr) {
+                        elem.setAttribute(attr, content);
+                    } else {
+                        elem.innerHTML = content;
+                    }
                 }
             }
 
