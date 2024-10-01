@@ -474,6 +474,25 @@
             }
         }
     }
+    const map = function map(arr, func) {
+        const response = [];
+        if (isArray(arr) && isFunction(func)) {
+            let count = 0;
+            for (const item of arr) {
+                const resp = func(item, count, arr);
+                if (resp === false) {
+                    break; // exit
+                }
+                if (resp === true) {
+                    response.push(item); // add item of the array
+                } else if (!!resp) {
+                    response.push(resp); // add response
+                }
+                count++;
+            }
+        }
+        return response;
+    }
 
     //-- types --//
     class Vanilla {
@@ -3519,6 +3538,7 @@
             // arrays
             sortAsc: sortAsc,
             sortDesc: sortDesc,
+            map: map,
             // conversion
             mdToHTML: mdToHTML,
         }
