@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.12`;
+    const v = `0.0.13`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
