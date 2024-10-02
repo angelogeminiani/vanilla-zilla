@@ -29,6 +29,8 @@
     //-- events --//
     const on_before_create = "onBeforeCreate";
     const on_after_create = "onAfterCreate";
+    const on_detach = "onDetach";
+    const on_dispose = "onDispose";
     const on_ready = "onReady";
     const on_data_received = "onDataReceived";
     const on_show = "onShow";
@@ -2378,6 +2380,8 @@
                     this._elem.classList.add("vz-hidden");
                     this._detached = true;
                     this._visible = false;
+                    this.__invoke_detach();
+                    return true;
                 } catch (err) {
                     console.error("BaseComponent.detach: ", err);
                 }
@@ -2391,6 +2395,7 @@
                     this._elem = null;
                     this._visible = false;
                     this._model = null;
+                    this.__invoke_dispose();
                     return true;
                 } catch (err) {
                     console.error("BaseComponent.remove: ", err);
@@ -2649,6 +2654,14 @@
 
             __invoke_on_ready() {
                 return invoke(this, this[on_ready]);
+            }
+
+            __invoke_detach() {
+                invoke(this, this[on_detach]);
+            }
+
+            __invoke_dispose() {
+                invoke(this, this[on_dispose]);
             }
 
         } // Component class
