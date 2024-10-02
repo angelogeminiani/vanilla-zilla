@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.13`;
+    const v = `0.0.14`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2501,6 +2501,7 @@
                     if (!!parent) {
                         if (!!elem) {
                             parent.insertAdjacentElement("beforeend", elem);
+                            return elem;
                         } else {
                             console.warn(`${name} v${v}: ${this.name}.appendChild() -> Unable to solve element.`, v);
                         }
@@ -2508,6 +2509,7 @@
                         console.warn(`${name} v${v}: ${this.name}.appendChild() -> Missing parent.`);
                     }
                 }
+                return null;
             }
 
             /**
