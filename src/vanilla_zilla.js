@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.21
+ *  Version: 0.0.22
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.21`;
+    const v = `0.0.22`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2165,6 +2165,8 @@
         class BaseComponent extends Vanilla {
             constructor(...args) {
                 super();
+                this._name = "anonymous";
+                this._slug = "anonymous";
                 this._model = {};
                 this._model["uid"] = this._uid;
                 this._parent_elem = null; // parent node
@@ -2194,6 +2196,21 @@
                     if (!this._model["uid"]) {
                         this._model["uid"] = this._uid;
                     }
+                }
+            }
+
+            get slug() {
+                return this._slug;
+            }
+
+            get name() {
+                return this._name;
+            }
+
+            set name(value) {
+                if (!!value) {
+                    this._name = value;
+                    this._slug = slugify(value);
                 }
             }
 
@@ -2721,32 +2738,11 @@
         class BaseView extends instance.BaseComponent {
             constructor(...args) {
                 super();
-                this._name = "anonymous";
-                this._slug = "anonymous";
-                this._model = {};
+
                 // optionals sub-views
                 this._views = new ViewManager(this);
 
                 this.__init_view(...args);
-            }
-
-            get slug() {
-                return this._slug;
-            }
-
-            get name() {
-                return this._name;
-            }
-
-            set name(value) {
-                if (!!value) {
-                    this._name = value;
-                    this._slug = slugify(value);
-                }
-            }
-
-            get model() {
-                return this._model;
             }
 
             get views() {
@@ -2793,12 +2789,13 @@
             //-- PRIVATE --//
 
             __init_view(...args) {
+                const self = this;
                 const {obj, str} = argsSolve(...args);
                 if (!!obj) {
                     eachProp(obj, (k, v) => {
-                        this._model[k] = v;
+                        self.model[k] = v;
                     })
-                    if (!this._model["uid"]) this._model["uid"] = this._uid;
+                    if (!self.model["uid"]) self.model["uid"] = self.uid;
                 }
                 if (!!str) {
                     super.html = str;
@@ -2842,11 +2839,14 @@
                 const url = self._url;
                 const model = self._model;
                 const name = self._name;
+                const slug = self._slug;
+                log(`ViewLoader._init_loader. Initializing loader for name='${name}', slug='${slug}', url='${url}', model='${model}', parent='${parent}'`);
                 instance.require(url, (exports, err) => {
                     if (!!err) {
                         self._view_resolver.reject(new Error((`Error creating page from "${url}": ${err}`)));
-                        // console.error(`Error creating page from "${url}": `, errors);
+                        log(`ViewLoader._init_loader. Error creating page from "${url}": `, err);
                     } else {
+                        log(`ViewLoader._init_loader. Start loop on exports: `, exports);
                         eachProp(exports, async (k, ctr) => {
                             // create page with constructor
                             const page = new ctr(model);
