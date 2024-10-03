@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.18
+ *  Version: 0.0.19
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.18`;
+    const v = `0.0.19`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -41,6 +41,11 @@
     const hasOwn = op.hasOwnProperty;
     const isBrowser = !!(typeof context !== 'undefined' && typeof navigator !== 'undefined' && !!document);
     const isWebWorker = !isBrowser && typeof importScripts !== 'undefined';
+    const log = function log(...args){
+        if (vanilla.verbose){
+            console.log(...args);
+        }
+    }
     const hasProp = function hasProp(obj, prop) {
         return hasOwn.call(obj, prop);
     }
@@ -922,6 +927,7 @@
         instance.__ready__ = false;
         instance.i18n = i18n;
         instance.version = v;
+        instance.verbose = false;
         instance.env = {
             name: name,
             version: v,
@@ -2977,11 +2983,15 @@
              * @returns {Promise<BaseView>}
              */
             async goto(v, effectFn, ...options) {
+                const self = this;
                 if (v !== undefined) {
+                    log("ViewManager.goto", v, effectFn, ...options);
                     return await new Promise((resolve, reject) => {
-                        if (this.length() === 0) {
+                        log("ViewManager.goto. Pages: ", self.length());
+                        if (self.length() === 0) {
                             // page requested, but still not added
-                            const item = this._late_actions.push(this, this.goto, v, effectFn, ...options);
+                            log("ViewManager.goto. Adding function to late actions.");
+                            const item = self._late_actions.push(self, self.goto, v, effectFn, ...options);
                             item.callback = function (response) {
                                 if (isError(response)) {
                                     reject(response);
@@ -2990,9 +3000,10 @@
                                 }
                             }
                         } else {
-                            this.get(v).then((view) => {
+                            log("ViewManager.goto. Searching page into existing: ", v);
+                            self.get(v).then((view) => {
                                 if (!!view) {
-                                    this.__activateView(view, effectFn, ...options).then(() => {
+                                    self.__activateView(view, effectFn, ...options).then(() => {
                                         resolve(view);
                                     }).catch((err) => {
                                         reject(err);
