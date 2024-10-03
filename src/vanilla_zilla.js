@@ -2339,7 +2339,7 @@
                 return v;
             }
 
-            async parent(){
+            async parent() {
                 await this.ready();
                 return this._parent_elem;
             }
@@ -3115,23 +3115,30 @@
             }
 
             __onInternalMessage(subscription, message) {
+                const self = this;
+                const parent = super;
                 if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_pages)) {
                     if (!!message.data) {
                         const sender = message.sender;
                         if (sender === message_target_routing) {
-                            const hash = message.data.hash;
-                            const pageName = hash.name || "";
-                            if (!!pageName) {
-                                // do not notify
-                                super.goto(pageName, null).catch((err) => {
-                                    console.error(`__onInternalMessage() Navigating to page "${pageName}"`, err);
-                                });
-                            } else {
-                                // notify home
-                                this.home().catch((err) => {
-                                    console.error(`__onInternalMessage() Navigating to Home page`, err);
-                                });
-                            }
+                            // wait page manager is ready
+                            self.ready().catch((err) => {
+                                console.error(`PageManager.__onInternalMessage() Waiting for PageManager to be ready: `, err);
+                            }).then(() => {
+                                const hash = message.data.hash;
+                                const pageName = hash.name || "";
+                                if (!!pageName) {
+                                    // do not notify
+                                    parent.goto(pageName, null).catch((err) => {
+                                        console.error(`PageManager.__onInternalMessage() Navigating to page "${pageName}"`, err);
+                                    });
+                                } else {
+                                    // notify home
+                                    self.home().catch((err) => {
+                                        console.error(`PageManager.__onInternalMessage() Navigating to Home page`, err);
+                                    });
+                                }
+                            });
                         }
                     }
                 }
