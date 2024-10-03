@@ -2136,6 +2136,7 @@
             DataPing: DataPing,
             QueueManager: QueueManager,
         };
+        instance.queue = new QueueManager(); // shortcut to vanilla.app.messages
     })(vanilla);
 
     // --------------------------
@@ -2271,6 +2272,10 @@
 
             //-- EVENTS --//
 
+            /**
+             * Add event to element.
+             * @param params HtmlElement, promise<HtmlElement>, "id", function, ...args
+             */
             on(...params) {
                 const self = this;
                 if (this.isConsistent()) {
@@ -2334,6 +2339,11 @@
                 return v;
             }
 
+            async parent(){
+                await this.ready();
+                return this._parent_elem;
+            }
+
             attach(v) {
                 const self = this;
                 if (!!v) {
@@ -2375,6 +2385,7 @@
             detach() {
                 try {
                     this.off();
+                    instance.app.messages.unsubscribe(this.uid); // unsubscribe also messages
                     const elem = instance.dom.body();
                     elem.append(this._elem);
                     this._elem.classList.add("vz-hidden");
@@ -2391,6 +2402,7 @@
             remove() {
                 try {
                     this.off();
+                    instance.app.messages.unsubscribe(this.uid); // unsubscribe also messages
                     this._elem.remove();
                     this._elem = null;
                     this._visible = false;
@@ -3044,7 +3056,8 @@
                 super();
 
                 // subscribe app messages
-                messages.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
+                this._queue = instance.queue;
+                this._queue.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
             }
 
             async ready() {
@@ -3094,7 +3107,7 @@
             __notify(page) {
                 // notify app internally
                 const pageName = page.slug;
-                messages.publish(channel_zilla,
+                this._queue.publish(channel_zilla,
                     new ZMessage(
                         message_target_pages, message_type_internal, message_target_routing, {name: pageName}
                     )
@@ -3132,7 +3145,7 @@
             constructor() {
                 super();
                 this._pages = pages;
-                this._messages = messages;
+                this._messages = instance.queue;
                 this._state = new instance.classes.VanillaStore();
             }
 
@@ -3155,12 +3168,12 @@
 
         }
 
-        const messages = new instance.classes.QueueManager();
         const pages = new PageManager();
 
         //-- assign --//
         instance.BaseView = BaseView;
         instance.app = new App();
+
 
     })(vanilla);
 
@@ -3533,6 +3546,8 @@
             invoke: invoke,
             invokeAsync: invokeAsync,
             isFunction: isFunction,
+            isAsyncFunction: isAsyncFunction,
+            isCallable: isCallable,
             isArray: isArray,
             isObject: isObject,
             isString: isString,
