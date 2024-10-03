@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.24
+ *  Version: 0.0.25
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.24`;
+    const v = `0.0.25`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -41,8 +41,8 @@
     const hasOwn = op.hasOwnProperty;
     const isBrowser = !!(typeof context !== 'undefined' && typeof navigator !== 'undefined' && !!document);
     const isWebWorker = !isBrowser && typeof importScripts !== 'undefined';
-    const log = function log(...args){
-        if (vanilla.verbose){
+    const log = function log(...args) {
+        if (vanilla.verbose) {
             console.log(...args);
         }
     }
@@ -509,7 +509,33 @@
     class Vanilla {
         constructor() {
             this._uid = vuid();
+            this._name = ""
+            this._slug = ""
         }
+
+        get uid() {
+            return this._uid;
+        }
+
+        set uid(v) {
+            this._uid = v;
+        }
+
+        get name() {
+            return this._name;
+        }
+
+        set name(value) {
+            if (!!value) {
+                this._name = value;
+                this._slug = slugify(value);
+            }
+        }
+
+        get slug() {
+            return this._slug;
+        }
+
     }
 
     //-- late actions --//
@@ -3091,8 +3117,8 @@
         } // View Manager
 
         class PageManager extends ViewManager {
-            constructor() {
-                super();
+            constructor(parent) {
+                super(parent);
 
                 // subscribe app messages
                 this._queue = instance.queue;
@@ -3194,7 +3220,8 @@
         class App extends Vanilla {
             constructor() {
                 super();
-                this._pages = pages;
+
+                this._pages = new PageManager(this);
                 this._messages = instance.queue;
                 this._state = new instance.classes.VanillaStore();
             }
@@ -3217,8 +3244,6 @@
             }
 
         }
-
-        const pages = new PageManager();
 
         //-- assign --//
         instance.BaseView = BaseView;
