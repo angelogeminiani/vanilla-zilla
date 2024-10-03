@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.27
+ *  Version: 0.0.28
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.27`;
+    const v = `0.0.28`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -954,6 +954,7 @@
         instance.i18n = i18n;
         instance.version = v;
         instance.verbose = false;
+        instance.log = log;
         instance.env = {
             name: vname,
             version: v,
@@ -961,6 +962,7 @@
             isWorker: isWebWorker,
             context: context,
         };
+
     })(vanilla);
 
     // --------------------------
@@ -2314,9 +2316,14 @@
                 return this._elem_promise;
             }
 
+            /**
+             * Return HTMLElement of current component
+             * @returns {Promise<HTMLElement>}
+             */
             async render() {
                 return this._elem_promise;
             }
+
 
             //-- ready --//
 
@@ -2353,7 +2360,7 @@
                         const name = str || "click";
                         const fn = !!func && func.length > 0 ? func[0] : false;
                         if (!!fn) {
-                            instance.events.on(this, target, name, fn, ...args);
+                            instance.events.on(this, target, name, fn.bind(this), ...args);
                         }
                     }
                 } else {
