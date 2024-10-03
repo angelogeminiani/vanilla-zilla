@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.26
+ *  Version: 0.0.27
  */
 !(() => {
 
-    const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.26`;
+    const vname = "🦖 Vanilla-Zilla";
+    const v = `0.0.27`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -639,7 +639,7 @@
             if (typeof luxon !== 'undefined') {
                 return luxon;
             } else {
-                console.warn(`${name} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
+                console.warn(`${vname} v${v}: 'luxon' date and time library disabled.\nSee at: https://moment.github.io/luxon/#/install`);
             }
         } catch (e) {
         }
@@ -656,7 +656,7 @@
             options = options || {noHeaderId: true, tables: true, simpleLineBreaks: true};
             return new showdown.Converter(options);
         } else {
-            console.warn(`${name} v${v}: 'showdown' markdown converter library disabled.\nSee at: https://showdownjs.com/`);
+            console.warn(`${vname} v${v}: 'showdown' markdown converter library disabled.\nSee at: https://showdownjs.com/`);
         }
         return false;
     }
@@ -788,7 +788,7 @@
                 const n = this.normalize(lang);
                 if (!this._dictionaries[n]) {
                     this._dictionaries[n] = new i18nDictionary({
-                            "vanilla": `${name} v${v}`,
+                            "vanilla": `${vname} v${v}`,
                             "tpl_from": "from <%from%>",
                             "tpl_from-to": "from <%from%> to <%to%>"
                         }
@@ -890,7 +890,7 @@
                             return renderTpl(label, optModel);
                         }
                     } catch (e) {
-                        console.warn(`${name} v${v}: Error on i18n.getLabel("${key}")`, e);
+                        console.warn(`${vname} v${v}: Error on i18n.getLabel("${key}")`, e);
                     }
                     return label;
                 }
@@ -904,7 +904,7 @@
                 this._locale = new Intl.Locale(lang);
                 if (this._lang !== this._locale.language) {
                     this._lang = this._locale.language;
-                    this.dictionary.put("vanilla", `${name} v${v}`);
+                    this.dictionary.put("vanilla", `${vname} v${v}`);
                 }
                 this._languageNames = new Intl.DisplayNames(this._lang, {
                     type: 'language'
@@ -914,14 +914,14 @@
                 });
                 if (this._enabled) {
                     const luxon = getLuxon();
-                    console.debug(`${name} v${v}: i18n enabled.`,
+                    console.debug(`${vname} v${v}: i18n enabled.`,
                         "language:", this._lang,
                         "date:", this.fmtDateTime(new Date()),
                         "number:", this.fmtNumber(1234567890.12345),
                         "luxon:", !!luxon ? "Luxon installed!" : "Luxon not installed!",
                     );
                 } else {
-                    console.debug(`${name} v${v}: i18n disabled.`);
+                    console.debug(`${vname} v${v}: i18n disabled.`);
                 }
             }
         }
@@ -955,7 +955,7 @@
         instance.version = v;
         instance.verbose = false;
         instance.env = {
-            name: name,
+            name: vname,
             version: v,
             isBrowser: isBrowser,
             isWorker: isWebWorker,
@@ -2578,10 +2578,10 @@
                             parent.insertAdjacentElement("beforeend", elem);
                             return elem;
                         } else {
-                            console.warn(`${name} v${v}: ${this.name}.appendChild() -> Unable to solve element.`, v);
+                            console.warn(`${vname} v${v}: ${this.name}.appendChild() -> Unable to solve element.`, v);
                         }
                     } else {
-                        console.warn(`${name} v${v}: ${this.name}.appendChild() -> Missing parent.`);
+                        console.warn(`${vname} v${v}: ${this.name}.appendChild() -> Missing parent.`);
                     }
                 }
                 return null;
@@ -3273,7 +3273,7 @@
                 if (!history) {
                     this._available = false;
                     this._enabled = false;
-                    console.warn(`${name}: Cannot enable routing in this environment because is not supported!`)
+                    console.warn(`${vname}: Cannot enable routing in this environment because is not supported!`)
                 } else {
                     // listen to browser changes
                     addEventListener("popstate", this.__onpopstate.bind(this));
@@ -3282,7 +3282,7 @@
                     // dom ready event
                     instance.dom.ready(this.__onDomReady.bind(this));
                     // ok, ready
-                    console.info(`${name}: Routing enabled!`);
+                    console.info(`${vname}: Routing enabled!`);
                 }
             }
 
@@ -3296,7 +3296,7 @@
                 if (this._available) {
                     this._enabled = enabled;
                 } else if (enabled) {
-                    console.warn(`${name} Cannot enable routing in this environment because is not supported!`)
+                    console.warn(`${vname} Cannot enable routing in this environment because is not supported!`)
                 }
             }
 
@@ -3560,7 +3560,7 @@
                     return startIndex > -1 && endIndex > -1 ? text.substring(startIndex, endIndex).trim() : text.trim();
                 }
             } catch (err) {
-                console.error(`${name} v${v}: strings.textBetween() raised error.`, err);
+                console.error(`${vname} v${v}: strings.textBetween() raised error.`, err);
             }
             return text;
         }
@@ -3602,7 +3602,7 @@
                     }
                 }
             } catch (err) {
-                console.error(`${name} v${v}: html.bodyContent() raise error.`, err);
+                console.error(`${vname} v${v}: html.bodyContent() raise error.`, err);
             }
             return `<div>INVALID HTML CONTENT: "${ostring.call(textHtml)}"</div>`;
         }
@@ -3693,9 +3693,9 @@
                             context.module = {
                                 exports: {}
                             };
-                            console.debug(`${name} v${v}: using internal export module.`, context.module);
+                            console.debug(`${vname} v${v}: using internal export module.`, context.module);
                         } else {
-                            console.debug(`${name} v${v}: export module inherited from.`, context.module);
+                            console.debug(`${vname} v${v}: export module inherited from.`, context.module);
                         }
 
                         vanilla.__ready__ = true;
@@ -3715,9 +3715,9 @@
     // --------------------------
 
     vanilla.ready().then(() => {
-        console.info(`${name} v${vanilla.version}: loaded!`);
+        console.info(`${vname} v${vanilla.version}: loaded!`);
     }).catch((err) => {
-        console.error(`${name} v${v}: Error loading!`, err);
+        console.error(`${vname} v${v}: Error loading!`, err);
     });
 
     // --------------------------
