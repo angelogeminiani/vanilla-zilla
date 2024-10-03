@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.20
+ *  Version: 0.0.21
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.20`;
+    const v = `0.0.21`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2838,12 +2838,13 @@
             }
 
             _init_loader() {
-                const url = this._url;
-                const model = this._model;
-                const name = this._name;
+                const self = this;
+                const url = self._url;
+                const model = self._model;
+                const name = self._name;
                 instance.require(url, (exports, err) => {
                     if (!!err) {
-                        this._view_resolver.reject(new Error((`Error creating page from "${url}": ${err}`)));
+                        self._view_resolver.reject(new Error((`Error creating page from "${url}": ${err}`)));
                         // console.error(`Error creating page from "${url}": `, errors);
                     } else {
                         eachProp(exports, async (k, ctr) => {
@@ -2851,11 +2852,11 @@
                             const page = new ctr(model);
                             page.name = name;
                             page.attach(instance.dom.body());
-                            if (!!this._parent) {
-                                const parent = await this.__getElem(this._parent);
+                            if (!!self._parent) {
+                                const parent = await self.__getElem(self._parent);
                                 page.attach(parent);
                             }
-                            this._view_resolver.resolve(page);
+                            self._view_resolver.resolve(page);
                         });
                     }
                 }).catch((err) => {
@@ -2964,8 +2965,11 @@
                         const page = await pp.view;
                         if (!page) continue;
                         if (isString(v)) {
-                            log("ViewManager.get. Comparing passed reference with page: ", v, page.uid, page.name, page.slug);
-                            if (page.uid === v || page.name === v || page.slug === v) {
+                            const page_uid = page.uid;
+                            const page_name = page.name;
+                            const page_slug = page.slug;
+                            log(`ViewManager.get. Comparing passed reference '${v}' with page uid='${page_uid}' name='${page_uid}' slug='${page_slug}'`, page);
+                            if (page_uid === v || page_name === v || page_slug === v) {
                                 return page;
                             }
                         } else if (isNumber(v)) {
