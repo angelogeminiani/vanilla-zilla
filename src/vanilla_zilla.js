@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.23
+ *  Version: 0.0.24
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.23`;
+    const v = `0.0.24`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2903,12 +2903,14 @@
             }
 
             push(...items) {
+                log(`ViewManager.push. Pushing items:`, ...items);
                 for (const item of items) {
                     const name = item["name"];
                     const url = item["url"];
                     const data = item["data"] || {};
                     if (!!name && !!url) {
-                        const pp = new ViewLoader(name, url, data, this._parent)
+                        const pp = new ViewLoader(name, url, data, this._parent);
+                        log(`ViewManager.push. Adding:`, pp);
                         this._view_promises.push(pp);
                     }
                 }
@@ -2917,9 +2919,8 @@
                     this._late_actions.doAll();
                 }
 
-                this._enabled = items.length > 0;
-
                 // return number of promises
+                log(`ViewManager.push. Added:`, this._view_promises.length);
                 return this._view_promises.length;
             }
 
@@ -3100,6 +3101,7 @@
             }
 
             push(...items) {
+                log(`PageManager.push. Pushing items:`, ...items);
                 super.push(...items);
             }
 
