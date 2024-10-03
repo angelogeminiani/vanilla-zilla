@@ -9,7 +9,7 @@
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.16`;
+    const v = `0.0.18`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -494,6 +494,10 @@
             }
         }
         return response;
+    }
+    //-- async --//
+    const sleep = function sleep(time) {
+        return new Promise(resolve => setTimeout(resolve, time));
     }
 
     //-- types --//
@@ -1688,6 +1692,11 @@
 
             /**
              * Start a timer.
+             * Usage:
+             * VanillaTimer.run(function);
+             * VanillaTimer.run(interval, function);
+             * VanillaTimer.run(interval, function, param1, param2, param3...)
+             * VanillaTimer.run(param1, param2, param3...)
              * @param args
              * @returns {VanillaTimer|null}
              */
@@ -2870,7 +2879,6 @@
                 this._last_view_fn = null;
                 this._curr_view = null;
                 this._last_view = null;
-
                 // console.log("ViewManager.ctr() parent:", this._parentComponent);
             }
 
@@ -2880,6 +2888,10 @@
 
             set parent(value) {
                 this._parent = value;
+            }
+
+            length() {
+                return !!this._view_promises ? this._view_promises.length : 0;
             }
 
             push(...items) {
@@ -2896,6 +2908,8 @@
                 if (this._late_actions.length > 0) {
                     this._late_actions.doAll();
                 }
+
+                this._enabled = items.length > 0;
 
                 // return number of promises
                 return this._view_promises.length;
@@ -2935,7 +2949,7 @@
                 if (!!ppromise) {
                     return ppromise.view;
                 }
-                if (this._view_promises.length > 0) {
+                if (this.length() > 0) {
                     let count = 0;
                     for (const pp of this._view_promises) {
                         const page = await pp.view;
@@ -2965,7 +2979,7 @@
             async goto(v, effectFn, ...options) {
                 if (v !== undefined) {
                     return await new Promise((resolve, reject) => {
-                        if (this._view_promises.length === 0) {
+                        if (this.length() === 0) {
                             // page requested, but still not added
                             const item = this._late_actions.push(this, this.goto, v, effectFn, ...options);
                             item.callback = function (response) {
@@ -3063,6 +3077,10 @@
             async ready() {
                 // console.log("PageManager.ready()");
                 return super.ready();
+            }
+
+            push(...items) {
+                super.push(...items);
             }
 
             /**
@@ -3205,7 +3223,7 @@
                     // listen to browser changes
                     addEventListener("popstate", this.__onpopstate.bind(this));
                     // subscribe app messages
-                    instance.app.messages.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
+                    instance.queue.subscribe(channel_zilla, this.__onInternalMessage.bind(this));
                     // dom ready event
                     instance.dom.ready(this.__onDomReady.bind(this));
                     // ok, ready
@@ -3252,7 +3270,7 @@
             __onDomReady() {
                 const url = new URL(context.location);
                 this._curr_hash = this.__parseHash(url.hash);
-                this.__notify();
+                this.__notifyToPages();
             }
 
             __onpopstate(e) {
@@ -3260,7 +3278,7 @@
                 const changed = !!hash && hash.name !== this._curr_hash.name;
                 this._curr_hash = hash;
                 if (changed) {
-                    this.__notify();
+                    this.__notifyToPages();
                 }
             }
 
@@ -3280,14 +3298,16 @@
                 return response;
             }
 
-            __notify() {
-                const hash = this._curr_hash;
-                // notify app internally
-                instance.app.messages.publish(channel_zilla,
-                    new ZMessage(
-                        message_target_routing, message_type_internal, message_target_pages, {hash: hash}
-                    )
-                );
+            __notifyToPages() {
+                if (!!instance.app && !!instance.app.pages) {
+                    const hash = this._curr_hash;
+                    // notify app internally
+                    instance.queue.publish(channel_zilla,
+                        new ZMessage(
+                            message_target_routing, message_type_internal, message_target_pages, {hash: hash}
+                        )
+                    );
+                }
             }
 
             __onInternalMessage(subscription, message) {
@@ -3571,6 +3591,7 @@
             uuid: uuid,
             argsSolve: argsSolve,
             argsSolveMultiple: argsSolveMultiple,
+            sleep: sleep,
             // arrays
             sortAsc: sortAsc,
             sortDesc: sortDesc,
@@ -3597,6 +3618,13 @@
     //  vanilla promise
     // --------------------------
 
+    /**
+     * Usage:
+     *  await vanilla.ready();
+     *  vanilla.ready((vanilla)=>{...});
+     * @param callback
+     * @returns {Promise<vanilla>} vanilla instance
+     */
     vanilla.ready = function vanillaReady(callback) {
         return new Promise((resolve, reject) => {
             if (!!vanilla.__ready__) {
@@ -3605,7 +3633,6 @@
             } else {
                 vanilla.dom.ready(() => {
                     if (!vanilla.__ready__) {
-                        vanilla.__ready__ = true;
                         // module exports
                         if (!context.module) {
                             context.module = {
@@ -3615,9 +3642,14 @@
                         } else {
                             console.debug(`${name} v${v}: export module inherited from.`, context.module);
                         }
+
+                        vanilla.__ready__ = true;
+                        resolve(vanilla);
+                        invoke(vanilla, callback, vanilla);
+                    } else {
+                        resolve(vanilla);
+                        invoke(vanilla, callback, vanilla);
                     }
-                    resolve(vanilla);
-                    invoke(vanilla, callback, vanilla);
                 });
             }
         });
