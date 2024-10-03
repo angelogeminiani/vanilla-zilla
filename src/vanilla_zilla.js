@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.19
+ *  Version: 0.0.20
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.19`;
+    const v = `0.0.20`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2948,11 +2948,14 @@
              * @returns {Promise<BaseView>}
              */
             async get(v) {
+                log("ViewManager.get()", v);
                 if (isView(v)) {
+                    log("ViewManager.get. Returning passed view: ", v);
                     return v;
                 }
                 const ppromise = v instanceof ViewLoader ? v : null;
                 if (!!ppromise) {
+                    log("ViewManager.get. Returning passed ViewLoader view: ", ppromise.view);
                     return ppromise.view;
                 }
                 if (this.length() > 0) {
@@ -2961,6 +2964,7 @@
                         const page = await pp.view;
                         if (!page) continue;
                         if (isString(v)) {
+                            log("ViewManager.get. Comparing passed reference with page: ", v, page.uid, page.name, page.slug);
                             if (page.uid === v || page.name === v || page.slug === v) {
                                 return page;
                             }
@@ -2987,7 +2991,7 @@
                 if (v !== undefined) {
                     log("ViewManager.goto", v, effectFn, ...options);
                     return await new Promise((resolve, reject) => {
-                        log("ViewManager.goto. Pages: ", self.length());
+                        log("ViewManager.goto. Pages: ", self.length(), self._view_promises);
                         if (self.length() === 0) {
                             // page requested, but still not added
                             log("ViewManager.goto. Adding function to late actions.");
