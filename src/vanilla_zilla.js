@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.22
+ *  Version: 0.0.23
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.22`;
+    const v = `0.0.23`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2857,6 +2857,7 @@
                                 page.attach(parent);
                             }
                             self._view_resolver.resolve(page);
+                            log(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
                         });
                     }
                 }).catch((err) => {
@@ -2968,7 +2969,7 @@
                             const page_uid = page.uid;
                             const page_name = page.name;
                             const page_slug = page.slug;
-                            log(`ViewManager.get. Comparing passed reference '${v}' with page uid='${page_uid}' name='${page_uid}' slug='${page_slug}'`, page);
+                            log(`ViewManager.get. Comparing passed reference '${v}' with page uid='${page_uid}' name='${page_name}' slug='${page_slug}'`, page);
                             if (page_uid === v || page_name === v || page_slug === v) {
                                 return page;
                             }
