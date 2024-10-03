@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.25
+ *  Version: 0.0.26
  */
 !(() => {
 
     const name = "🦖 Vanilla-Zilla";
-    const v = `0.0.25`;
+    const v = `0.0.26`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const context = (typeof window !== 'undefined') ? window : false;
@@ -2833,15 +2833,15 @@
 
         class ViewLoader {
 
-            constructor(name, url, model, parent) {
-                this._parent = parent;
-                this._name = name;
-                this._slug = slugify(name);
-                this._url = url;
-                this._model = model || {};
+            constructor(_name, _url, _model, _parent) {
+                this._parent = _parent;
+                this._name = _name;
+                this._slug = slugify(_name);
+                this._url = _url;
+                this._model = _model || {};
                 this._view_resolver = Promise.withResolvers(); // promise
 
-                log(`ViewLoader.constructor. Creating loader with name='${name}', url='${url}', model='${model}', parent='${parent}'`);
+                log(`ViewLoader.constructor. Creating loader with name='${_name}', url='${_url}', model='${_model}', parent='${_parent}'`);
 
                 // bootstrap
                 this._init_loader();
@@ -2877,16 +2877,20 @@
                     } else {
                         log(`ViewLoader._init_loader. Start loop on exports: `, exports);
                         eachProp(exports, async (k, ctr) => {
-                            // create page with constructor
-                            const page = new ctr(model);
-                            page.name = name;
-                            page.attach(instance.dom.body());
-                            if (!!self._parent) {
-                                const parent = await self.__getElem(self._parent);
-                                page.attach(parent);
+                            try{
+                                // create page with constructor
+                                const page = new ctr(model);
+                                page.name = name;
+                                page.attach(instance.dom.body());
+                                if (!!self._parent) {
+                                    const parent = await self.__getElem(self._parent);
+                                    page.attach(parent);
+                                }
+                                self._view_resolver.resolve(page);
+                                log(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
+                            } catch(err){
+                                console.error("ViewLoader._init_loader", err);
                             }
-                            self._view_resolver.resolve(page);
-                            log(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
                         });
                     }
                 }).catch((err) => {
@@ -3221,7 +3225,7 @@
             constructor() {
                 super();
 
-                this._pages = new PageManager(this);
+                this._pages = new PageManager("body");
                 this._messages = instance.queue;
                 this._state = new instance.classes.VanillaStore();
             }
