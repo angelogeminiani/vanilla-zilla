@@ -2806,6 +2806,7 @@
         //-- ASYNC PAGE LAUNCHER --//
 
         class ViewLoader {
+
             constructor(name, url, model, parent) {
                 this._parent = parent;
                 this._name = name;
@@ -2813,6 +2814,8 @@
                 this._url = url;
                 this._model = model || {};
                 this._view_resolver = Promise.withResolvers(); // promise
+
+                log(`ViewLoader.constructor. Creating loader with name='${name}', url='${url}', model='${model}', parent='${parent}'`);
 
                 // bootstrap
                 this._init_loader();
@@ -2909,6 +2912,7 @@
                     const url = item["url"];
                     const data = item["data"] || {};
                     if (!!name && !!url) {
+                        log(`ViewManager.push. Creating ViewLoader:`, name, url, data, this._parent);
                         const pp = new ViewLoader(name, url, data, this._parent);
                         log(`ViewManager.push. Adding:`, pp);
                         this._view_promises.push(pp);
