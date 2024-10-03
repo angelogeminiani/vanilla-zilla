@@ -4,7 +4,7 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.5
+ *  Version: 0.0.18
  */
 !(() => {
 
