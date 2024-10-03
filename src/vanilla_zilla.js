@@ -3116,7 +3116,6 @@
 
             __onInternalMessage(subscription, message) {
                 const self = this;
-                const parent = super;
                 if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_pages)) {
                     if (!!message.data) {
                         const sender = message.sender;
@@ -3129,7 +3128,7 @@
                                 const pageName = hash.name || "";
                                 if (!!pageName) {
                                     // do not notify
-                                    parent.goto(pageName, null).catch((err) => {
+                                    super.goto(pageName, null).catch((err) => {
                                         console.error(`PageManager.__onInternalMessage() Navigating to page "${pageName}"`, err);
                                     });
                                 } else {
