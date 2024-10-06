@@ -4,14 +4,15 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.28
+ *  Version: 0.0.29
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.28`;
+    const v = `0.0.29`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
+    const vconsole = console;
     const context = (typeof window !== 'undefined') ? window : false;
     const document = !!context ? context.document : false;
     const navigator = !!context ? context.navigator : false;
@@ -26,9 +27,10 @@
     const message_type_internal = "internal";
     const message_target_pages = "pages";
     const message_target_routing = "routing";
-    //-- events --//
+    //-- lifecycle events --//
     const on_before_create = "onBeforeCreate";
     const on_after_create = "onAfterCreate";
+    const on_attach = "onAttach";
     const on_detach = "onDetach";
     const on_dispose = "onDispose";
     const on_ready = "onReady";
@@ -41,11 +43,6 @@
     const hasOwn = op.hasOwnProperty;
     const isBrowser = !!(typeof context !== 'undefined' && typeof navigator !== 'undefined' && !!document);
     const isWebWorker = !isBrowser && typeof importScripts !== 'undefined';
-    const log = function log(...args) {
-        if (vanilla.verbose) {
-            console.log(...args);
-        }
-    }
     const hasProp = function hasProp(obj, prop) {
         return hasOwn.call(obj, prop);
     }
@@ -106,6 +103,9 @@
     };
     const isHTMLElement = function isHTMLElement(v) {
         return !!v && v instanceof HTMLElement;
+    };
+    const isHTMLElementBody = function isBody(v) {
+        return isHTMLElement(v) && v.tagName.toLowerCase() === "body";
     };
     const isPromise = function isPromise(v) {
         return !!v && v instanceof Promise;
@@ -953,8 +953,29 @@
         instance.__ready__ = false;
         instance.i18n = i18n;
         instance.version = v;
-        instance.verbose = false;
-        instance.log = log;
+        instance._verbose = false;
+        instance.verbose = (b) => {
+            if (b !== undefined) {
+                instance.verbose = !!b;
+                if (instance.verbose) {
+                    // enable
+                    context.console = vconsole;
+                } else {
+                    // disable
+                    context.console = {
+                        log: () => {
+                        },
+                        debug: () => {
+                        },
+                        info: () => {
+                        },
+                        error: vconsole.error,
+                    };
+                }
+            }
+            return instance._verbose;
+        };
+        instance.log = context.console.log;
         instance.env = {
             name: vname,
             version: v,
@@ -2203,7 +2224,7 @@
                 this._late_actions = new Futures(); // binding to execute after component is consistent (has HTML)
                 this._elem = null; // dom ui
                 this._elem_promise = null;
-                this._consistence_promise_resolver = Promise.withResolvers();
+                // this._consistence_promise_resolver = Promise.withResolvers();
                 this._ready_promise_resolver = Promise.withResolvers();
                 this._created = false;
 
@@ -2265,7 +2286,7 @@
             set html(value) {
                 if (isHTML(value)) {
                     const fullHtml = instance.html.bodyContent(value); //instance.template.render(value, this._model);
-                    const html = this._renderHtml(fullHtml);
+                    const html = this.__renderHtml(fullHtml);
                     const elem = instance.dom.elem(html);
                     if (!!elem) {
                         // instance.dom.body().insertAdjacentHTML("beforeend", html);
@@ -2404,8 +2425,11 @@
                 return v;
             }
 
-            async parent() {
-                await this.ready();
+            /**
+             * Return parent
+             * @returns {BaseComponent|null}
+             */
+            parent() {
                 return this._parent_elem;
             }
 
@@ -2423,8 +2447,7 @@
                             // parent is valid HTMLElement
                             this._parent_elem = parent;
                             if (!!this._elem && !!this._parent_elem) {
-                                this._parent_elem.append(this._elem);
-                                this._detached = false;
+                                this.__appendElemToParent()
                             } else {
                                 // we have a parent node, but not yet html
                                 this._late_actions.push(this, this.attach, v);
@@ -2639,7 +2662,7 @@
                     if (!!this._parent_elem) {
                         this._detached = false;
                     }
-                    elem.innerHTML = this._renderHtml(elem.innerHTML);
+                    elem.innerHTML = this.__renderHtml(elem.innerHTML);
                     if (!!elem.getAttribute("id")) {
                         this.uid = elem.getAttribute("id");
                     } else {
@@ -2674,18 +2697,28 @@
                             this._late_actions.doAll();
                         }
 
-                        // onAfterCreate
-                        this.__invoke_after_create();
-
                         // invoke initialized
-                        this._consistence_promise_resolver.resolve(this);
+                        // this._consistence_promise_resolver.resolve(this);
                     } catch (err) {
-                        this._consistence_promise_resolver.reject(err);
+                        // this._consistence_promise_resolver.reject(err);
+                        console.error("BaseView.__init_elem:", err.message);
                     }
                 }
             }
 
-            _renderHtml(html) {
+            __appendElemToParent() {
+                this._parent_elem.append(this._elem);
+                this._detached = false;
+
+                // onAfterCreate and readiness
+                if (!self._created) {
+                    this.__invoke_after_create();
+                }
+
+                this.__invoke_attach();
+            }
+
+            __renderHtml(html) {
                 const response = instance.template.render(html, this._model);
                 if (!isHTML(response)) {
                     return `<div>${response}</div>`;
@@ -2701,7 +2734,7 @@
                 const self = this;
                 if (!self._created) {
                     self._created = true;
-                    const response = invoke(self, self[on_after_create]);
+                    const response = invoke(self, self[on_after_create]); // ON AFTER CREATE
                     // resolve ready
                     if (isPromise(response)) {
                         response.catch((err) => {
@@ -2731,6 +2764,10 @@
 
             __invoke_on_ready() {
                 return invoke(this, this[on_ready]);
+            }
+
+            __invoke_attach() {
+                invoke(this, this[on_attach]);
             }
 
             __invoke_detach() {
@@ -2848,7 +2885,7 @@
                 this._model = _model || {};
                 this._view_resolver = Promise.withResolvers(); // promise
 
-                log(`ViewLoader.constructor. Creating loader with name='${_name}', url='${_url}', model='${_model}', parent='${_parent}'`);
+                console.debug(`ViewLoader.constructor. Creating loader with name='${_name}', url='${_url}', model='${_model}', parent='${_parent}'`);
 
                 // bootstrap
                 this._init_loader();
@@ -2876,26 +2913,27 @@
                 const model = self._model;
                 const name = self._name;
                 const slug = self._slug;
-                log(`ViewLoader._init_loader. Initializing loader for name='${name}', slug='${slug}', url='${url}', model='${model}', parent='${parent}'`);
+                console.debug(`ViewLoader._init_loader. Initializing loader for name='${name}', slug='${slug}', url='${url}', model='${model}', parent='${parent}'`);
                 instance.require(url, (exports, err) => {
                     if (!!err) {
                         self._view_resolver.reject(new Error((`Error creating page from "${url}": ${err}`)));
-                        log(`ViewLoader._init_loader. Error creating page from "${url}": `, err);
+                        console.debug(`ViewLoader._init_loader. Error creating page from "${url}": `, err);
                     } else {
-                        log(`ViewLoader._init_loader. Start loop on exports: `, exports);
+                        console.debug(`ViewLoader._init_loader. Start loop on exports: `, exports);
                         eachProp(exports, async (k, ctr) => {
-                            try{
+                            try {
                                 // create page with constructor
                                 const page = new ctr(model);
                                 page.name = name;
-                                page.attach(instance.dom.body());
                                 if (!!self._parent) {
                                     const parent = await self.__getElem(self._parent);
                                     page.attach(parent);
+                                } else {
+                                    page.attach(instance.dom.body());
                                 }
                                 self._view_resolver.resolve(page);
-                                log(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
-                            } catch(err){
+                                console.debug(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
+                            } catch (err) {
                                 console.error("ViewLoader._init_loader", err);
                             }
                         });
@@ -2943,15 +2981,15 @@
             }
 
             push(...items) {
-                log(`ViewManager.push. Pushing items:`, ...items);
+                console.debug(`ViewManager.push. Pushing items:`, ...items);
                 for (const item of items) {
                     const name = item["name"];
                     const url = item["url"];
                     const data = item["data"] || {};
                     if (!!name && !!url) {
-                        log(`ViewManager.push. Creating ViewLoader:`, name, url, data, this._parent);
+                        console.debug(`ViewManager.push. Creating ViewLoader:`, name, url, data, this._parent);
                         const pp = new ViewLoader(name, url, data, this._parent);
-                        log(`ViewManager.push. Adding:`, pp);
+                        console.debug(`ViewManager.push. Adding:`, pp);
                         this._view_promises.push(pp);
                     }
                 }
@@ -2961,7 +2999,7 @@
                 }
 
                 // return number of promises
-                log(`ViewManager.push. Added:`, this._view_promises.length);
+                console.debug(`ViewManager.push. Added:`, this._view_promises.length);
                 return this._view_promises.length;
             }
 
@@ -2992,14 +3030,14 @@
              * @returns {Promise<BaseView>}
              */
             async get(v) {
-                log("ViewManager.get()", v);
+                console.log("ViewManager.get()", v);
                 if (isView(v)) {
-                    log("ViewManager.get. Returning passed view: ", v);
+                    console.debug("ViewManager.get. Returning passed view: ", v);
                     return v;
                 }
                 const ppromise = v instanceof ViewLoader ? v : null;
                 if (!!ppromise) {
-                    log("ViewManager.get. Returning passed ViewLoader view: ", ppromise.view);
+                    console.debug("ViewManager.get. Returning passed ViewLoader view: ", ppromise.view);
                     return ppromise.view;
                 }
                 if (this.length() > 0) {
@@ -3011,7 +3049,7 @@
                             const page_uid = page.uid;
                             const page_name = page.name;
                             const page_slug = page.slug;
-                            log(`ViewManager.get. Comparing passed reference '${v}' with page uid='${page_uid}' name='${page_name}' slug='${page_slug}'`, page);
+                            console.debug(`ViewManager.get. Comparing passed reference '${v}' with page uid='${page_uid}' name='${page_name}' slug='${page_slug}'`, page);
                             if (page_uid === v || page_name === v || page_slug === v) {
                                 return page;
                             }
@@ -3036,12 +3074,12 @@
             async goto(v, effectFn, ...options) {
                 const self = this;
                 if (v !== undefined) {
-                    log("ViewManager.goto", v, effectFn, ...options);
+                    console.debug("ViewManager.goto", v, effectFn, ...options);
                     return await new Promise((resolve, reject) => {
-                        log("ViewManager.goto. Pages: ", self.length(), self._view_promises);
+                        console.debug("ViewManager.goto. Pages: ", self.length(), self._view_promises);
                         if (self.length() === 0) {
                             // page requested, but still not added
-                            log("ViewManager.goto. Adding function to late actions.");
+                            console.debug("ViewManager.goto. Adding function to late actions.");
                             const item = self._late_actions.push(self, self.goto, v, effectFn, ...options);
                             item.callback = function (response) {
                                 if (isError(response)) {
@@ -3051,7 +3089,7 @@
                                 }
                             }
                         } else {
-                            log("ViewManager.goto. Searching page into existing: ", v);
+                            console.debug("ViewManager.goto. Searching page into existing: ", v);
                             self.get(v).then((view) => {
                                 if (!!view) {
                                     self.__activateView(view, effectFn, ...options).then(() => {
@@ -3142,7 +3180,7 @@
             }
 
             push(...items) {
-                log(`PageManager.push. Pushing items:`, ...items);
+                console.debug(`PageManager.push. Pushing items:`, ...items);
                 super.push(...items);
             }
 
@@ -3642,6 +3680,7 @@
             isNumber: isNumber,
             isDate: isDate,
             isHTMLElement: isHTMLElement,
+            isHTMLElementBody: isHTMLElementBody,
             isUrl: isUrl,
             isView: isView,
             isVUID: isVUID,
@@ -3654,6 +3693,9 @@
             argsSolve: argsSolve,
             argsSolveMultiple: argsSolveMultiple,
             sleep: sleep,
+            // timestamp
+            timestamp: timestamp,
+            timestampUnix: timestampUnix,
             // arrays
             sortAsc: sortAsc,
             sortDesc: sortDesc,
