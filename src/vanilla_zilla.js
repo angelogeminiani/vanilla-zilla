@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.29
+ *  Version: 0.0.30
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.29`;
+    const v = `0.0.30`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -1055,7 +1055,7 @@
 
         /**
          * Receive an input with an optional model and returns an HTMLElement
-         * @param args elem, html, vuid and model
+         * @param args elem, HTML, vuid and model
          * @returns {Promise<HTMLElement|null>}
          */
         async function solve(...args) {
@@ -1110,8 +1110,8 @@
         }
 
         /**
-         * Return an Html element by ID
-         * @param id ID of the html element to return
+         * Return an HTML element by ID
+         * @param id ID of the HTML element to return
          * @returns {HTMLElement}
          */
         function get(id) {
@@ -2209,6 +2209,38 @@
 
     (function initComponents(instance) {
 
+        //-- component regisrty --//
+
+        class ComponentRegistry extends Vanilla {
+            constructor() {
+                super();
+                this._registry = {}; // map of components. KeyPair = uid:component
+            }
+
+            put(item) {
+                if (isComponent(item) && !!item.uid) {
+                    const uid = item.uid;
+                    this._registry[uid] = item;
+                    console.log("ComponentRegistry.put. Added: ", uid);
+                } else {
+                    console.error("ComponentRegistry.put. Added invalid instance: ", item)
+                }
+            }
+
+            delete(item) {
+                const uid = isComponent(item) ? item.uid : isString(item) ? item : "";
+                if (!!uid && !!this._registry[uid]) {
+                    delete this._registry[uid];
+                    console.log("ComponentRegistry.delete. Removed: ", uid);
+                }
+            }
+
+            get(vuid){
+                const uid = parseVUID(vuid)["id"];
+                return this._registry[uid];
+            }
+        }
+
         //-- component --//
 
         class BaseComponent extends Vanilla {
@@ -2224,7 +2256,6 @@
                 this._late_actions = new Futures(); // binding to execute after component is consistent (has HTML)
                 this._elem = null; // dom ui
                 this._elem_promise = null;
-                // this._consistence_promise_resolver = Promise.withResolvers();
                 this._ready_promise_resolver = Promise.withResolvers();
                 this._created = false;
 
@@ -2359,7 +2390,7 @@
             //-- EVENTS --//
 
             /**
-             * Add event to element.
+             * Add event listener to element.
              * @param params HtmlElement, promise<HtmlElement>, "id", function, ...args
              */
             on(...params) {
@@ -2426,11 +2457,27 @@
             }
 
             /**
-             * Return parent
-             * @returns {BaseComponent|null}
+             * Return parent HTMLElement
+             * @returns {HTMLElement|null}
              */
             parent() {
                 return this._parent_elem;
+            }
+
+            /**
+             * Return parent Component main element or null
+             * @returns {HTMLElement|null}
+             */
+            root() {
+                const elem = this.parent();
+                if (!!elem) {
+                    const id = elem.getAttribute("id");
+                    const vuid = !!id ? parseVUID(id)["id"] : false;
+                    if (!!vuid && vuid !== id) {
+                        return instance.dom.get(vuid);
+                    }
+                }
+                return elem;
             }
 
             attach(v) {
@@ -2699,6 +2746,9 @@
 
                         // invoke initialized
                         // this._consistence_promise_resolver.resolve(this);
+
+                        // add to registry
+                        instance.components.registry.put(this);
                     } catch (err) {
                         // this._consistence_promise_resolver.reject(err);
                         console.error("BaseView.__init_elem:", err.message);
@@ -2776,6 +2826,7 @@
 
             __invoke_dispose() {
                 invoke(this, this[on_dispose]);
+                instance.components.registry.delete(this);
             }
 
         } // Component class
@@ -2793,6 +2844,7 @@
         instance.BaseComponent = BaseComponent;
         instance.components = {
             BaseComponent: BaseComponent,
+            registry: new ComponentRegistry(),
             componentize: componentize,
         };
     })(vanilla);
@@ -3685,6 +3737,7 @@
             isView: isView,
             isVUID: isVUID,
             toVUID: toVUID,
+            parseVUID: parseVUID,
             each: each,
             eachReverse: eachReverse,
             eachProp: eachProp,
