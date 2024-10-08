@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.31
+ *  Version: 0.0.32
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.31`;
+    const v = `0.0.32`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -2235,7 +2235,7 @@
                 }
             }
 
-            get(vuid){
+            get(vuid) {
                 const uid = parseVUID(vuid)["id"];
                 return this._registry[uid];
             }
@@ -2258,6 +2258,7 @@
                 this._elem_promise = null;
                 this._ready_promise_resolver = Promise.withResolvers();
                 this._created = false;
+                this._invokedLifecycles = [];
 
                 // initialize reading all arguments
                 this.__init_component(...args);
@@ -2348,6 +2349,12 @@
                     // not supported yet!
                     console.warn(`Error creating BaseComponent loading html from: "${value}"`);
                 }
+            }
+
+            //-- METHODS --//
+
+            init(html, model) {
+                this.__init_component(html, model)
             }
 
             setElem(elem) {
@@ -2692,6 +2699,7 @@
 
             __init_component(...args) {
                 // console.log("BaseComponent.__init_component()", ...args);
+
                 // onBeforeCreate
                 this.__invoke_before_create();
 
@@ -2777,14 +2785,14 @@
             }
 
             __invoke_before_create() {
-                invoke(this, this[on_before_create]);
+                return this.__invoke(on_before_create, true);
             }
 
             __invoke_after_create() {
                 const self = this;
                 if (!self._created) {
                     self._created = true;
-                    const response = invoke(self, self[on_after_create]); // ON AFTER CREATE
+                    const response = self.__invoke(on_after_create, true); // ON AFTER CREATE
                     // resolve ready
                     if (isPromise(response)) {
                         response.catch((err) => {
@@ -2813,20 +2821,34 @@
             }
 
             __invoke_on_ready() {
-                return invoke(this, this[on_ready]);
+                return this.__invoke(on_ready, true);
             }
 
             __invoke_attach() {
-                invoke(this, this[on_attach]);
+                return this.__invoke(on_attach);
             }
 
             __invoke_detach() {
-                invoke(this, this[on_detach]);
+                return this.__invoke(on_detach);
             }
 
             __invoke_dispose() {
-                invoke(this, this[on_dispose]);
+                const response =  this.__invoke(on_dispose, true);
                 instance.components.registry.delete(this);
+                return response;
+            }
+
+            __invoke(method, onlyOnce){
+                let response = undefined;
+                if (onlyOnce) {
+                    if (this._invokedLifecycles.indexOf(method) === -1) {
+                        this._invokedLifecycles.push(method);
+                        response =  invoke(this, this[method]);
+                    }
+                } else {
+                    response =  invoke(this, this[method]);
+                }
+                return response;
             }
 
         } // Component class
@@ -2863,19 +2885,15 @@
 
                 // optionals sub-views
                 this._views = new ViewManager(this);
-
-                this.__init_view(...args);
             }
+
+            //-- PROPERTIES --//
 
             get views() {
                 return this._views;
             }
 
-            //-- view initialization --//
-
-            init(html, model) {
-                this.__init_view(html, model)
-            }
+            //-- METHODS --//
 
             async ready() {
                 await super.ready();
@@ -2910,19 +2928,7 @@
 
             //-- PRIVATE --//
 
-            __init_view(...args) {
-                const self = this;
-                const {obj, str} = argsSolve(...args);
-                if (!!obj) {
-                    eachProp(obj, (k, v) => {
-                        self.model[k] = v;
-                    })
-                    if (!self.model["uid"]) self.model["uid"] = self.uid;
-                }
-                if (!!str) {
-                    super.html = str;
-                }
-            }
+
         } // BaseView
 
         //-- ASYNC PAGE LAUNCHER --//
@@ -3285,7 +3291,7 @@
                 );
             }
 
-            __onInternalMessage(message, subscription, ) {
+            __onInternalMessage(message, subscription,) {
                 const self = this;
                 if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_pages)) {
                     if (!!message.data) {
