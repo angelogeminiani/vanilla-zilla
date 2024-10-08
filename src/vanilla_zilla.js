@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.32
+ *  Version: 0.0.33
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.32`;
+    const v = `0.0.33`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -2447,7 +2447,7 @@
              * Return HTMLElement of current component
              * @returns {Promise<HTMLElement>}
              */
-            async render() {
+            async elem() {
                 return this._elem_promise;
             }
 
