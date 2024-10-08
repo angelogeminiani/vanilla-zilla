@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.32
+ *  Version: 0.0.31
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.32`;
+    const v = `0.0.31`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -2881,7 +2881,7 @@
 
         class BaseView extends instance.BaseComponent {
             constructor(...args) {
-                super();
+                super(...args);
 
                 // optionals sub-views
                 this._views = new ViewManager(this);
@@ -2928,7 +2928,19 @@
 
             //-- PRIVATE --//
 
-
+            __init_view(...args) {
+                const self = this;
+                const {obj, str} = argsSolve(...args);
+                if (!!obj) {
+                    eachProp(obj, (k, v) => {
+                        self.model[k] = v;
+                    })
+                    if (!self.model["uid"]) self.model["uid"] = self.uid;
+                }
+                if (!!str) {
+                    super.html = str;
+                }
+            }
         } // BaseView
 
         //-- ASYNC PAGE LAUNCHER --//
