@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.31
+ *  Version: 0.0.32
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.31`;
+    const v = `0.0.32`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -536,6 +536,9 @@
             return this._slug;
         }
 
+        dispose() {
+            this._uid = null;
+        }
     }
 
     //-- late actions --//
@@ -969,6 +972,7 @@
                         },
                         info: () => {
                         },
+                        warn: vconsole.warn,
                         error: vconsole.error,
                     };
                 }
@@ -2209,7 +2213,7 @@
 
     (function initComponents(instance) {
 
-        //-- component regisrty --//
+        //-- component registry --//
 
         class ComponentRegistry extends Vanilla {
             constructor() {
@@ -2241,6 +2245,70 @@
             }
         }
 
+        //-- component lifecycle --//
+
+        class ComponentLifecycle extends Vanilla {
+            constructor(emitter) {
+                super();
+                this._emitter = emitter
+                this._invokedLifecycles = [];
+            }
+
+            dispose() {
+                this._emitter = null;
+                this._invokedLifecycles = null;
+                super.dispose();
+            }
+
+            invokeReady() {
+                return this.__invoke(on_ready, true);
+            }
+
+            invokeBeforeCreate() {
+                return this.__invoke(on_before_create, true);
+            }
+
+            invokeAfterCreate() {
+                return this.__invoke(on_after_create, true);
+            }
+
+            invokeDispose() {
+                return this.__invoke(on_dispose, true);
+            }
+
+            invokeAttach() {
+                return this.__invoke(on_attach, false);
+            }
+
+            invokeDetach() {
+                return this.__invoke(on_detach, false);
+            }
+
+            invokeShow() {
+                return this.__invoke(on_show, false);
+            }
+
+            invokeHide() {
+                return this.__invoke(on_hide, false);
+            }
+
+            __invoke(method, onlyOnce) {
+                let response = undefined;
+                const func = !!this._emitter ? this._emitter[method] : false;
+                if (isCallable(func)) {
+                    if (onlyOnce) {
+                        if (this._invokedLifecycles.indexOf(method) === -1) {
+                            this._invokedLifecycles.push(method);
+                            response = invoke(this._emitter, func);
+                        }
+                    } else {
+                        response = invoke(this._emitter, func);
+                    }
+                }
+                return response;
+            }
+        }
+
         //-- component --//
 
         class BaseComponent extends Vanilla {
@@ -2258,7 +2326,7 @@
                 this._elem_promise = null;
                 this._ready_promise_resolver = Promise.withResolvers();
                 this._created = false;
-                this._invokedLifecycles = [];
+                this._lifecycle = new ComponentLifecycle(this);
 
                 // initialize reading all arguments
                 this.__init_component(...args);
@@ -2472,7 +2540,7 @@
             }
 
             /**
-             * Return parent Component main element or null
+             * Return root (parent Component main element) or null
              * @returns {HTMLElement|null}
              */
             root() {
@@ -2528,17 +2596,22 @@
                 try {
                     this.off();
                     instance.app.messages.unsubscribe(this.uid); // unsubscribe also messages
+                    instance.components.registry.delete(this.uid);
                     const elem = instance.dom.body();
                     elem.append(this._elem);
                     this._elem.classList.add("vz-hidden");
                     this._detached = true;
                     this._visible = false;
-                    this.__invoke_detach();
+                    this._lifecycle.invokeDetach();
                     return true;
                 } catch (err) {
                     console.error("BaseComponent.detach: ", err);
                 }
                 return false;
+            }
+
+            dispose() {
+                this.remove();
             }
 
             remove() {
@@ -2549,7 +2622,11 @@
                     this._elem = null;
                     this._visible = false;
                     this._model = null;
-                    this.__invoke_dispose();
+                    this._lifecycle.invokeDetach();
+                    this._lifecycle.invokeDispose();
+                    this._lifecycle.dispose();
+                    this._lifecycle = null;
+                    super.dispose();
                     return true;
                 } catch (err) {
                     console.error("BaseComponent.remove: ", err);
@@ -2569,7 +2646,7 @@
                                 invoke(this._elem, effectFn, this._elem, ...options);
                             }
                             // onShow
-                            invoke(this, this[on_show]);
+                            this._lifecycle.invokeShow();
                         }
                     } else {
                         this._late_actions.push(this, this.show, effectFn, ...options);
@@ -2590,7 +2667,7 @@
                                 invoke(this._elem, effectFn, this._elem, ...options);
                             }
                             // onHide
-                            invoke(this, this[on_hide]);
+                            this._lifecycle.invokeHide()
                         }
                     } else {
                         this._late_actions.push(this, this.hide, effectFn, ...options);
@@ -2701,7 +2778,7 @@
                 // console.log("BaseComponent.__init_component()", ...args);
 
                 // onBeforeCreate
-                this.__invoke_before_create();
+                this._lifecycle.invokeBeforeCreate();
 
                 const {obj, str, elem} = argsSolve(...args);
                 if (!!obj) {
@@ -2770,10 +2847,10 @@
 
                 // onAfterCreate and readiness
                 if (!self._created) {
-                    this.__invoke_after_create();
+                    this.__process_after_create();
                 }
 
-                this.__invoke_attach();
+                this._lifecycle.invokeAttach();
             }
 
             __renderHtml(html) {
@@ -2784,21 +2861,17 @@
                 return response;
             }
 
-            __invoke_before_create() {
-                return this.__invoke(on_before_create, true);
-            }
-
-            __invoke_after_create() {
+            __process_after_create() {
                 const self = this;
                 if (!self._created) {
                     self._created = true;
-                    const response = self.__invoke(on_after_create, true); // ON AFTER CREATE
+                    const response = self._lifecycle.invokeAfterCreate(); // ON AFTER CREATE
                     // resolve ready
                     if (isPromise(response)) {
                         response.catch((err) => {
                             self._ready_promise_resolver.reject(err);
                         }).then((item) => {
-                            const ready = self.__invoke_on_ready();
+                            const ready = self._lifecycle.invokeReady();
                             if (isPromise(ready)) {
                                 ready.then(() => {
                                     self._ready_promise_resolver.resolve(self);
@@ -2808,7 +2881,7 @@
                             }
                         });
                     } else {
-                        const ready = self.__invoke_on_ready();
+                        const ready = self._lifecycle.invokeReady();
                         if (isPromise(ready)) {
                             ready.then(() => {
                                 self._ready_promise_resolver.resolve(self);
@@ -2818,37 +2891,6 @@
                         }
                     }
                 }
-            }
-
-            __invoke_on_ready() {
-                return this.__invoke(on_ready, true);
-            }
-
-            __invoke_attach() {
-                return this.__invoke(on_attach);
-            }
-
-            __invoke_detach() {
-                return this.__invoke(on_detach);
-            }
-
-            __invoke_dispose() {
-                const response =  this.__invoke(on_dispose, true);
-                instance.components.registry.delete(this);
-                return response;
-            }
-
-            __invoke(method, onlyOnce){
-                let response = undefined;
-                if (onlyOnce) {
-                    if (this._invokedLifecycles.indexOf(method) === -1) {
-                        this._invokedLifecycles.push(method);
-                        response =  invoke(this, this[method]);
-                    }
-                } else {
-                    response =  invoke(this, this[method]);
-                }
-                return response;
             }
 
         } // Component class
@@ -2926,21 +2968,6 @@
 
             }
 
-            //-- PRIVATE --//
-
-            __init_view(...args) {
-                const self = this;
-                const {obj, str} = argsSolve(...args);
-                if (!!obj) {
-                    eachProp(obj, (k, v) => {
-                        self.model[k] = v;
-                    })
-                    if (!self.model["uid"]) self.model["uid"] = self.uid;
-                }
-                if (!!str) {
-                    super.html = str;
-                }
-            }
         } // BaseView
 
         //-- ASYNC PAGE LAUNCHER --//
