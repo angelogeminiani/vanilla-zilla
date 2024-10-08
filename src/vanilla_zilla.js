@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.30
+ *  Version: 0.0.31
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.30`;
+    const v = `0.0.31`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -1947,7 +1947,7 @@
          *  DataPing
          *  Create a timer and ping data each "interval".
          *  If property "path" is assigned, the callback event is called only if
-         *  the latest value is different from previous.
+         *  the latest value is different from the previous.
          */
         class DataPing extends Vanilla {
             constructor(options) {
@@ -2138,8 +2138,8 @@
                     for (const listener of this._listeners) {
                         const subscription = listener.subscription;
                         if (subscription.channel === "*" || subscription.channel === channelName || channelName === "*") {
-                            const sender = new QueueSubscription(channelName, subscription.id);
-                            invokeAsync(this, listener.func, sender, data, ...listener._args);
+                            const queueSubscription = new QueueSubscription(channelName, subscription.id);
+                            invokeAsync(this, listener.func, data, queueSubscription, ...listener._args);
                         }
                     }
                 }, channelName, data);
@@ -3285,7 +3285,7 @@
                 );
             }
 
-            __onInternalMessage(subscription, message) {
+            __onInternalMessage(message, subscription, ) {
                 const self = this;
                 if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_pages)) {
                     if (!!message.data) {
@@ -3462,7 +3462,7 @@
                 }
             }
 
-            __onInternalMessage(subscription, message) {
+            __onInternalMessage(message, subscription) {
                 if (!!subscription && subscription.channel === channel_zilla && !!message && message instanceof ZMessage && message.isTarget(message_target_routing)) {
                     if (!!message.data) {
                         const sender = message.sender;
