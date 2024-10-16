@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.34
+ *  Version: 0.0.35
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.34`;
+    const v = `0.0.35`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -1750,6 +1750,24 @@
                 return await response.json();
             }
 
+            async asJsonValue(...args) {
+                let name = "response";
+                for (const arg of args) {
+                    if (isString(arg)) {
+                        name = arg;
+                        continue;
+                    }
+                    if (isObject(arg)) {
+                        this._parse_options(arg);
+                    }
+                }
+                const response = await this.asJson();
+                if (!!response["error"]) {
+                    throw new Error(response["error"]);
+                }
+                return getDeep(response, name);
+            }
+
             async asArrayBuffer(options) {
                 this._parse_options(options);
                 const response = await this._fetch();
@@ -1855,7 +1873,9 @@
 
 
         instance.RemoteRequest = RemoteRequest;
-        instance.request = (url)=>{return (new RemoteRequest()).url(url);};
+        instance.request = (url) => {
+            return (new RemoteRequest()).url(url);
+        };
 
     })(vanilla);
 
@@ -2599,6 +2619,7 @@
                 this._ready_promise_resolver = Promise.withResolvers();
                 this._created = false;
                 this._lifecycle = new ComponentLifecycle(this);
+                this._children_components = []; // to destroy on detaching or dispose
 
                 // initialize reading all arguments
                 this.__init_component(...args);
@@ -2827,6 +2848,31 @@
                 return elem;
             }
 
+            /**
+             * Adds a component to the list of disposable components if it implements the dispose method.
+             *
+             * @param {Object} component - The component to be added.
+             * @return {Object} The current instance for chaining.
+             */
+            addDisposable(component) {
+                if (!!component && isCallable(component.dispose)) {
+                    this._children_components.push(component);
+                }
+                return this;
+            }
+
+            /**
+             * Attach the current component to a specified parent element, which can be an
+             * HTMLElement, a promise that resolves to an element, a string VUID, or another component.
+             *
+             * @param {Object|String|HTMLElement|Promise} v - The parent reference which can be:
+             * - An Object that contains relevant properties.
+             * - A string VUID that references an existing element.
+             * - An HTMLElement directly.
+             * - A Promise that resolves to an HTMLElement.
+             *
+             * @return {BaseComponent} The current instance of the component.
+             */
             attach(v) {
                 const self = this;
                 if (!!v) {
@@ -2899,6 +2945,11 @@
                     this._lifecycle.dispose();
                     this._lifecycle = null;
                     super.dispose();
+                    for (const comp of this._children_components) {
+                        if (!!comp && isCallable(comp.dispose)) {
+                            comp.dispose();
+                        }
+                    }
                     return true;
                 } catch (err) {
                     console.error("BaseComponent.remove: ", err);
