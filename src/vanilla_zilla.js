@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.33
+ *  Version: 0.0.34
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.33`;
+    const v = `0.0.34`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -130,6 +130,16 @@
     }
     const isError = function isError(v) {
         return !!v && v instanceof Error;
+    }
+    const sizeOf = function sizeOf(v) {
+        if (isArray(v)) {
+            return v.length;
+        }
+        let response = 0;
+        eachProp(v, function (k, v) {
+            response++;
+        })
+        return response;
     }
     const pathGetExt = function pathGetExt(url, defaultValue) {
         defaultValue = defaultValue || "";
@@ -1317,6 +1327,13 @@
             return response;
         }
 
+        /**
+         * Iterates over each element and its children, executing a callback function on each.
+         *
+         * @param {*} v - The value to be processed by the `elem` function to get the element.
+         * @param {Function} callback - The callback function to be executed on each element.
+         * @return {void}
+         */
         function eachElem(v, callback) {
             const el = elem(v);
             if (!!el && isFunction(callback)) {
@@ -1327,6 +1344,28 @@
                     eachElem(child, callback);
                 }
             }
+        }
+
+        /**
+         * Iterates over each element within the provided `elem` and updates its ID to a VUID (Universally Unique Identifier-ish).
+         * Only elements with a defined `id` attribute that are not scripts or styles are processed.
+         *
+         * @param {string} id - The base identifier used for generating VUIDs.
+         * @param {HTMLElement|string} v - The root element containing child elements to process.
+         * @return {HTMLElement} Returns v element
+         */
+        function eachElemToVUID(id, v) {
+            const element = elem(v);
+            eachElem(element, (el) => {
+                if (!!el) {
+                    const cid = el.getAttribute("id");
+                    const tag = el.tagName.toLowerCase();
+                    if (!!cid && !isVUID(cid) && tag !== "script" && tag !== "style") {
+                        setId(el, toVUID(id, cid));
+                    }
+                }
+            });
+            return element;
         }
 
         function head() {
@@ -1357,6 +1396,7 @@
             // children
             childOfById: childOfById,
             eachElem: eachElem,
+            eachElemToVUID: eachElemToVUID,
             // special
             head: head,
             body: body,
@@ -1585,6 +1625,238 @@
         //-- assign --//
         instance.require = require;
         instance.require.config = configFn;
+    })(vanilla);
+
+    // --------------------------
+    //  VANILLA - remote
+    // --------------------------
+
+    (function initRemote(instance) {
+
+        class RemoteRequest extends Vanilla {
+            constructor(options) {
+                super();
+
+                this._headers = new Headers();
+                this._body = undefined;
+                this._method = "POST";
+                this._mode = "cors" // cors, no-cors, or same-origin
+                this._url = "";
+                this._type = "text"; // json, text, blob, form, buffer, url
+                this._opt_abort = false;
+
+                options = options || {};
+                this._parse_options(options);
+
+                this._response_promise = undefined; // fetched response
+            }
+
+            getHeaders() {
+                return this._headers;
+            }
+
+            getBody() {
+                return this._body;
+            }
+
+            /**
+             * Creates and returns a new instance of AbortController.
+             * If an instance is created, the request will adopt this controller to receive a signal "controller.abort();".
+             * @return {AbortController} The AbortController instance created and stored in the _opt_abort property.
+             */
+            getAbortController() {
+                this._opt_abort = new AbortController();
+                return this._opt_abort;
+            }
+
+            mode(m) {
+                this._mode = m || "cors";
+                return this;
+            }
+
+            headers(v) {
+                eachProp(v, (k, v) => {
+                    this._headers.set(k, v);
+                });
+                return this;
+            }
+
+            body(v) {
+                this._body = {};
+                eachProp(v, (k, v) => {
+                    this._body[k] = v;
+                });
+                return this;
+            }
+
+            url(u) {
+                if (!!u) {
+                    this._url = u;
+                }
+                return this;
+            }
+
+            method(m) {
+                this._method = this._validate_method(m);
+                return this;
+            }
+
+            //-- ACTIONS --//
+
+            /**
+             * Use "submit" to get the response.
+             * If you already know about an expected response type, use
+             * "asText", "asJson", etc...
+             * @param options
+             * @returns {Promise<{ok}|*>}
+             */
+            async submit(options) {
+                this._parse_options(options);
+                return await this._get_response();
+            }
+
+            //-- RESPONSE TYPE HELPERS --//
+
+            async response(options) {
+                this._parse_options(options);
+                if (this._type === "json") {
+                    return await this.asJson();
+                }
+                if (this._type === "blob") {
+                    return await this.asBlob();
+                }
+                if (this._type === "buffer") {
+                    return await this.asArrayBuffer();
+                }
+                if (this._type === "form") {
+                    return await this.asFormData();
+                }
+                if (this._type === "url") {
+                    return await this.asObjectURL();
+                }
+                // text is default response
+                return await this.asText();
+            }
+
+            async asText(options) {
+                this._parse_options(options);
+                const response = await this._get_response();
+                return await response.text();
+            }
+
+            async asJson(options) {
+                this._parse_options(options);
+                const response = await this._fetch();
+                return await response.json();
+            }
+
+            async asArrayBuffer(options) {
+                this._parse_options(options);
+                const response = await this._fetch();
+                return await response.arrayBuffer();
+            }
+
+            async asFormData(options) {
+                this._parse_options(options);
+                const response = await this._fetch();
+                return await response.formData();
+            }
+
+            async asBlob(options) {
+                this._parse_options(options);
+                const response = await this._fetch();
+                return await response.blob();
+            }
+
+            async asObjectURL(options) {
+                const blob = await this.asBlob(options);
+                return URL.createObjectURL(blob);
+            }
+
+            //-- PRIVATE --//
+
+            async _get_response() {
+                const response = await this._fetch();
+                if (!response.ok) {
+                    throw new Error(`Response status: ${response.status}`);
+                }
+                return response;
+            }
+
+            _fetch() {
+                const method = this._method || "POST";
+                const url = this._url;
+                const headers = this._headers;
+                const body = this._body;
+                if (!url) {
+                    throw new Error("Missing URL!");
+                }
+
+                const options = {
+                    method: method,
+                    mode: this._mode || "cors",
+                }
+                if (this._opt_abort) {
+                    options.signal = this._opt_abort.signal;
+                }
+                if (sizeOf(body) > 0) {
+                    options.body = JSON.stringify(body);
+                    if (!headers.get("Content-Type")) {
+                        headers.set("Content-Type", "application/json; charset=UTF-8");
+                    }
+                    if (!headers.get("Content-Length")) {
+                        headers.set("Content-Length", "" + options.body.length);
+                    }
+                }
+                if (!headers.get("Accept")) {
+                    headers.set("Accept", "*/*");
+                }
+                options.headers = headers;
+
+                // execute request
+                this._response_promise = context.fetch(url, options);
+                return this._response_promise; // blob, arrayBuffer, fromData, json, text
+            }
+
+            _parse_options(options) {
+                if (!!options) {
+                    this._headers = !!options.headers ? this._parse_headers(options.headers) : this._headers;
+                    this._body = !!options.body ? options.body : this._body || {};
+                    this._method = !!options.method ? this._validate_method(options.method) : this._method || "POST";
+                    this._mode = !!options.mode ? options.mode : this._mode || "cors" // cors, no-cors, or same-origin
+                    this._url = !!options.url ? options.url : this._url || "";
+                    this._type = !!options.type ? options.type : this._type || "text";
+                }
+            }
+
+            _parse_headers(v) {
+                const headers = new Headers();
+                if (!!v) {
+                    eachProp(v, (k, v) => {
+                        headers.set(k, v);
+                    });
+                }
+                return headers;
+            }
+
+            _validate_method(m) {
+                if (isString(m)) {
+                    m = m.toLowerCase();
+                    if (m === "get") return "GET";
+                    if (m === "post") return "POST";
+                    if (m === "put") return "PUT";
+                    if (m === "delete") return "DELETE";
+                    if (m === "patch") return "PATCH";
+                    if (m === "options") return "OPTIONS";
+                }
+                return "POST";
+            }
+        }
+
+
+        instance.RemoteRequest = RemoteRequest;
+        instance.request = (url)=>{return (new RemoteRequest()).url(url);};
+
     })(vanilla);
 
     // --------------------------
@@ -2707,6 +2979,10 @@
 
             //-- children --//
 
+            async child(id) {
+                return await this.childElem(id);
+            }
+
             async childElem(id) {
                 const vid = this.toVUID(id) // isVUID(id) ? id : this._uid + "-" + id;
                 const elem = await this.getElem()
@@ -2736,6 +3012,9 @@
                     }
                     if (!!parent) {
                         if (!!elem) {
+                            // check for id to convert to uid
+                            instance.dom.eachElemToVUID(this._uid, elem);
+                            // insert
                             parent.insertAdjacentElement("beforeend", elem);
                             return elem;
                         } else {
@@ -3786,6 +4065,7 @@
             each: each,
             eachReverse: eachReverse,
             eachProp: eachProp,
+            sizeOf: sizeOf,
             get: getDeep,
             uuid: uuid,
             argsSolve: argsSolve,
