@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.36
+ *  Version: 0.0.37
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.36`;
+    const v = `0.0.37`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -174,6 +174,15 @@
             }
         }
         return "";
+    }
+    const pathJoin = function pathJoin(...args) {
+        return args.map((part, i) => {
+            if (i === 0) {
+                return part.trim().replace(/[\/]*$/g, '')
+            } else {
+                return part.trim().replace(/(^[\/]*|[\/]*$)/g, '')
+            }
+        }).filter(x => x.length).join('/');
     }
     const isReplaceableId = function isReplaceableId(text) {
         return !!text && isString(text) && text.startsWith(vPrefixReplaceable);
@@ -4131,6 +4140,10 @@
             argsSolve: argsSolve,
             argsSolveMultiple: argsSolveMultiple,
             sleep: sleep,
+            // paths
+            pathJoin: pathJoin,
+            pathGetName: pathGetName,
+            pathGetExt: pathGetExt,
             // timestamp
             timestamp: timestamp,
             timestampUnix: timestampUnix,
