@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.35
+ *  Version: 0.0.36
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.35`;
+    const v = `0.0.36`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -146,11 +146,15 @@
         if (isString(url) && url.length > 3) {
             const idx = url.lastIndexOf(".");
             if (idx > 0) {
-                const rawExt = url.substring(idx + 1) || defaultValue;
-                if (!!rawExt && rawExt.indexOf("?") > -1) {
-                    return rawExt.substring(0, rawExt.indexOf("?"));
+                let rawExt = url.substring(idx + 1) || defaultValue;
+                if (!!rawExt) {
+                    if (!!rawExt && rawExt.indexOf("?") > -1) {
+                        rawExt = rawExt.substring(0, rawExt.indexOf("?"));
+                    }
+                    if (!!rawExt && rawExt.length < 5) {
+                        return rawExt;
+                    }
                 }
-                return rawExt;
             }
         }
         return defaultValue;
@@ -3349,17 +3353,22 @@
                         console.debug(`ViewLoader._init_loader. Start loop on exports: `, exports);
                         eachProp(exports, async (k, ctr) => {
                             try {
-                                // create page with constructor
-                                const page = new ctr(model);
-                                page.name = name;
-                                if (!!self._parent) {
-                                    const parent = await self.__getElem(self._parent);
-                                    page.attach(parent);
+                                if (isCallable(ctr)) {
+                                    // create page with constructor
+                                    const page = new ctr(model);
+                                    page.name = name;
+                                    if (!!self._parent) {
+                                        const parent = await self.__getElem(self._parent);
+                                        page.attach(parent);
+                                    } else {
+                                        page.attach(instance.dom.body());
+                                    }
+                                    self._view_resolver.resolve(page);
+                                    console.debug(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
                                 } else {
-                                    page.attach(instance.dom.body());
+                                    // not a constructor
+                                    console.error("ViewLoader._init_loader: Received an invalid data. ", k, ctr);
                                 }
-                                self._view_resolver.resolve(page);
-                                console.debug(`ViewLoader._init_loader. Resolving '${name}' with: `, page);
                             } catch (err) {
                                 console.error("ViewLoader._init_loader", err);
                             }
