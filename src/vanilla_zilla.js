@@ -4,12 +4,12 @@
  *  Copyright: Gian Angelo Geminiani
  *  Repo: https://github.com/angelogeminiani/vanilla-zilla
  *  License: MIT
- *  Version: 0.0.37
+ *  Version: 0.0.38
  */
 !(() => {
 
     const vname = "🦖 Vanilla-Zilla";
-    const v = `0.0.37`;
+    const v = `0.0.38`;
     const vPrefix = "v-"
     const vPrefixReplaceable = "v*"
     const vconsole = console;
@@ -3728,6 +3728,12 @@
                 return this._messages;
             }
 
+            /**
+             * Retrieves the current state.
+             * i.e. "vanilla.app.state.get('key')"
+             * i.e. "vanilla.app.state.set('key', value)"
+             * @return {Object} The current state.
+             */
             get state() {
                 return this._state;
             }
@@ -4214,7 +4220,7 @@
     //  vanilla loaded
     // --------------------------
 
-    vanilla.ready().then(() => {
+    vanilla.ready(undefined).then(() => {
         console.info(`${vname} v${vanilla.version}: loaded!`);
     }).catch((err) => {
         console.error(`${vname} v${v}: Error loading!`, err);
